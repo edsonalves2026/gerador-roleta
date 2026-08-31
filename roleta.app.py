@@ -72,32 +72,44 @@ def buscar_dados_roleta_url(roleta_nome):
         
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Referer": "https://esportesdasorte.bet.br/",
+            "Origin": "https://esportesdasorte.bet.br"
         }
-        res = requests.get(endpoint, headers=headers, timeout=4)
+        res = requests.get(endpoint, headers=headers, timeout=5)
         if res.status_code == 200:
             dados = res.json()
+            
+            recent = []
             if isinstance(dados, dict):
-                args = dados.get("args", {})
-                recent = args.get("recentResults", [])
+                if "args" in dados and isinstance(dados["args"], dict):
+                    recent = dados["args"].get("recentResults", [])
+                elif "data" in dados:
+                    recent = dados.get("data", [])
+                elif "result" in dados:
+                    recent = dados.get("result", [])
             elif isinstance(dados, list):
                 recent = dados
-            else:
-                recent = []
-                
+
             numeros = []
             for item in recent:
-                if isinstance(item, list) and len(item) > 0:
+                if isinstance(item, dict):
+                    val = str(item.get("result", item.get("number", "")))
+                elif isinstance(item, list) and len(item) > 0:
                     val = str(item[0])
                 else:
                     val = str(item)
+                
                 val_clean = val.replace("[", "").replace("]", "").replace('"', '').strip()
                 if val_clean.isdigit():
                     numeros.append(int(val_clean))
             
-            return numeros[::-1] if numeros else st.session_state.get("historico", [])
+            if numeros:
+                return numeros[::-1]
     except Exception:
         pass
+    
     return st.session_state.get("historico", [])
 
 # ==========================================
@@ -292,7 +304,6 @@ roleta_selecionada = st.sidebar.selectbox(
 
 st.sidebar.markdown("---")
 
-# Função interna para validar novos números
 def processar_novo_numero(num_novo):
     if st.session_state.sinal_ativo:
         st.session_state.tentativa_atual += 1
