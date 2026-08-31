@@ -56,13 +56,60 @@ TABELA_PUXADORES_FIXA = {
 }
 
 # ==========================================
-# 2. FUNÇÃO DE INTEGRAÇÃO MULTI-ROLETA (API/URL)
+# 2. CONFIGURAÇÃO DAS ROLETAS E ENDPOINTS
 # ==========================================
-# Dicionário configurado com as URLs de cada Roleta
 URLS_ROLETAS = {
-    "Immersive Roulette": "SUA_URL_IMMERSIVE_AQUI",
-    "Auto-Roulette": "SUA_URL_AUTO_ROULETTE_AQUI"
+    "Cassino ao Vivo Immersive Roulette": {
+        "url_page": "https://esportesdasorte.bet.br/ptb/games/livecasino/detail/normal/18503/evol_7x0b1tgh7agmf6hv_BRL",
+        "table_id": "evol_7x0b1tgh7agmf6hv",
+        "api_endpoint": "https://esportesdasorte.bet.br/api/roulette/recentResults?tableId=evol_7x0b1tgh7agmf6hv"
+    },
+    "Cassino ao Vivo Auto-Roulette": {
+        "url_page": "https://esportesdasorte.bet.br/ptb/games/livecasino/detail/normal/18225/evol_48z5pjps3ntvqc1b_BRL",
+        "table_id": "evol_48z5pjps3ntvqc1b",
+        "api_endpoint": "https://esportesdasorte.bet.br/api/roulette/recentResults?tableId=evol_48z5pjps3ntvqc1b"
+    }
 }
+
+def buscar_dados_roleta_url(roleta_nome):
+    config = URLS_ROLETAS.get(roleta_nome, {})
+    endpoint = config.get("api_endpoint", "")
+    
+    if not endpoint:
+        return []
+        
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        res = requests.get(endpoint, headers=headers, timeout=4)
+        if res.status_code == 200:
+            dados = res.json()
+            # Parser para a estrutura "roulette.recentResults" do WebSocket/API
+            if isinstance(dados, dict):
+                args = dados.get("args", {})
+                recent = args.get("recentResults", [])
+            elif isinstance(dados, list):
+                recent = dados
+            else:
+                recent = []
+                
+            numeros = []
+            for item in recent:
+                # Extrai o número limpo caso venha como lista ['4'] ou string
+                if isinstance(item, list) and len(item) > 0:
+                    val = str(item[0])
+                else:
+                    val = str(item)
+                val_clean = val.replace("[", "").replace("]", "").replace('"', '').strip()
+                if val_clean.isdigit():
+                    numeros.append(int(val_clean))
+            
+            # Retorna na ordem cronológica (do mais antigo para o mais recente)
+            return numeros[::-1]
+    except Exception:
+        pass
+    return []
 
 def buscar_dados_roleta_url(roleta_selecionada):
     url_api = URLS_ROLETAS.get(roleta_selecionada, "")
