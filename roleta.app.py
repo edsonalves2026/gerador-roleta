@@ -1,53 +1,19 @@
 import streamlit as st
 import pandas as pd
-from collections import Counter
-import websocket
-import json
-
-# URL da conexão WebSocket capturada do DevTools (aba Network > WS)
-# Nota: substitua pela URL exata da sua sessão se houver token dinâmico
-WS_URL = "wss://esportesdasorte.bet.br/socket?messageFormat=json&EVOSESSIONID=..." 
-
-def ao_receber_mensagem(ws, mensagem):
-    try:
-        dados = json.loads(mensagem)
-        tipo = dados.get("type")
-        
-        # Captura a lista inicial com os números recentes
-        if tipo == "roulette.recentResults":
-            resultados = dados.get("args", {}).get("recentResults", [])
-            numeros = [int(n) for n in resultados if str(n).isdigit()]
-            print(f"Histórico Inicial Carregado: {numeros}")
-
-        # Captura o novo número sorteado em tempo real na virada de rodada
-        elif tipo == "roulette.tableState" and dados.get("args", {}).get("state") == "GAME_RESOLVED":
-            resultado_bruto = dados.get("args", {}).get("result", [])
-            if resultado_bruto:
-                novo_numero = int(resultado_bruto[0])
-                print(f"🚨 NOVO SORTEIO DETECTADO: {novo_numero}")
-
-    except Exception as e:
-        print(f"Erro ao processar mensagem: {e}")
-
-def ao_abrir(ws):
-    print("Conectado ao WebSocket da Evolution!")
-
-def ao_fechar(ws, status, msg):
-    print("Conexão encerrada.")
-
-if __name__ == "__main__":
-    ws = websocket.WebSocketApp(
-        WS_URL,
-        on_message=ao_receber_mensagem,
-        on_open=ao_abrir,
-        on_close=ao_fechar
-    )
-    ws.run_forever()
+import requests
 
 # ==========================================
-# 1. CONFIGURAÇÃO E CONSTANTES FÍSICAS
+# 1. CONFIGURAÇÃO E CREDENCIAIS SEGURAS
 # ==========================================
 st.set_page_config(page_title="Radar de Roleta Pro - Motor Avançado", layout="wide")
+
+# Leitura segura dos Secrets do Streamlit Cloud
+try:
+    TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "7779371878:AAGFkAZFV1y51JMMoyhEAJO-xrDryNw-vBw")
+    TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "-1003738768836")
+except Exception:
+    TELEGRAM_BOT_TOKEN = "7779371878:AAGFkAZFV1y51JMMoyhEAJO-xrDryNw-vBw"
+    TELEGRAM_CHAT_ID = "-1003738768836"
 
 # Cilindro Europeu na ordem física exata (sentido horário)
 CILINDRO_EUROPEU = [
@@ -55,7 +21,7 @@ CILINDRO_EUROPEU = [
     5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
 ]
 
-# 4 Setores Clássicos do Racetrack
+# Setores Clássicos do Racetrack
 SETORES_ROLETA = {
     "VOISINS_DU_ZERO": [22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25],
     "TIERS_DU_CYLINDRE": [27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33],
@@ -88,8 +54,40 @@ TABELA_PUXADORES_FIXA = {
 }
 
 # ==========================================
-# 2. FUNÇÕES AUXILIARES E MATEMÁTICA
+# 2. FUNÇÕES AUXILIARES & TELEGRAM
 # ==========================================
+def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return False, "Token ou Chat ID do Telegram não informados."
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    texto_detalhes = "\n".join([f"• {d}" for d in detalhes])
+    
+    mensagem = (
+        f"🚨 *SINAL CONFIRMADO - RADAR DE ROLETA*\n\n"
+        f"📌 *Último Número:* `{ultimo_num}`\n"
+        f"📊 *Score de Assertividade:* `{score}/5`\n"
+        f"🎯 *Alvos Sugeridos:* `{alvos}`\n"
+        f"🛡️ *Proteção:* `0 (Zero)`\n\n"
+        f"🔍 *Filtros Convergentes:*\n{texto_detalhes}\n\n"
+        f"⚠️ *Entrada recomendada: Até 2 Gales (G1/G2)*"
+    )
+    
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": mensagem,
+        "parse_mode": "Markdown"
+    }
+    
+    try:
+        res = requests.post(url, json=payload, timeout=5)
+        if res.status_code == 200:
+            return True, "Mensagem enviada para o Telegram com sucesso!"
+        else:
+            return False, f"Erro no Telegram: {res.text}"
+    except Exception as e:
+        return False, f"Falha na conexão: {e}"
+
 def obter_vizinhos_mesa(numero):
     idx = CILINDRO_EUROPEU.index(numero)
     tamanho = len(CILINDRO_EUROPEU)
@@ -124,29 +122,15 @@ def calcular_matriz_transicao(historico):
 def obter_puxadores_otimizados(numero_sorteado, historico_recentes):
     if len(historico_recentes) < 100:
         return TABELA_PUXADORES_FIXA.get(numero_sorteado, [])
-    
     puxadores_dinamicos = calcular_matriz_transicao(historico_recentes)
     puxadores_fixos = TABELA_PUXADORES_FIXA.get(numero_sorteado, [])
     intersecao = [num for num in puxadores_dinamicos if num in puxadores_fixos]
-    
     return intersecao if intersecao else (puxadores_dinamicos[:4] if puxadores_dinamicos else puxadores_fixos)
 
 def checar_estrategia_fantasma(historico):
     if len(historico) >= 3 and all(n in GRUPO_FANTASMA for n in historico[-3:]):
-        return {"status": "ATIVADO", "principais": [9, 19, 27], "protecoes": [7, 25, 28]}
+        return {"status": "ATIVADO", "principais": [9, 19, 27]}
     return {"status": "INATIVO"}
-
-def analisar_progressao(historico):
-    if len(historico) < 2:
-        return None
-    n1, n2 = historico[-2], historico[-1]
-    if n2 == n1 + 1:
-        return f"Sequência Crescente ({n1} ➔ {n2}): Entrar Terminal {(n2 + 1) % 10}"
-    elif n2 == n1 - 1:
-        return f"Sequência Decrescente ({n1} ➔ {n2}): Entrar Terminal {(n2 - 1) % 10}"
-    elif n2 == n1 + 2:
-        return f"Salto de +2 ({n1} ➔ {n2}): Entrar Terminal {(n2 + 2) % 10}"
-    return None
 
 def realizar_benchmark_modelos(historico, janela_analise=400):
     if len(historico) < 50:
@@ -185,48 +169,48 @@ def motor_de_scoragem(historico, houve_troca):
     alvos = set()
     detalhes = []
 
-    # 1. Puxadores Otimizados (Fixos vs. Dinâmicos)
+    # 1. Puxadores
     puxadores = obter_puxadores_otimizados(ultimo, historico)
     if puxadores:
         score += 1
         alvos.update(puxadores[:2])
-        detalhes.append(f"Puxadores Híbridos Selecionados: {puxadores}")
+        detalhes.append(f"Puxadores Híbridos: {puxadores[:2]}")
 
-    # 2. Vizinhos Físicos da Mesa (+-1, +-2)
+    # 2. Vizinhos Físicos
     vizinhos = obter_vizinhos_mesa(ultimo)
     score += 1
     alvos.update([vizinhos["esquerda_1"], vizinhos["direita_1"]])
     detalhes.append(f"Vizinhos Físicos: Esq({vizinhos['esquerda_1']}), Dir({vizinhos['direita_1']})")
 
-    # 3. Inversão de Dezenas
+    # 3. Inversão
     invertido = obter_dezena_invertida(ultimo)
     if invertido is not None:
         score += 1
         alvos.add(invertido)
-        detalhes.append(f"Inversão Detectada: {ultimo} ➔ {invertido}")
+        detalhes.append(f"Inversão: {ultimo} ➔ {invertido}")
 
     # 4. Estratégia Fantasma
     fantasma = checar_estrategia_fantasma(historico)
     if fantasma["status"] == "ATIVADO":
         score += 1
         alvos.update(fantasma["principais"])
-        detalhes.append("Padrão Fantasma Ativado: Entrada em 9-19-27")
+        detalhes.append("Padrão Fantasma Ativo (9-19-27)")
 
     # 5. Troca de Croupier
     vizinhos_zero = [1, 5, 8, 11, 14, 23, 26, 32]
     if houve_troca and ultimo in vizinhos_zero:
         score += 1
         alvos.update([0, 10, 20, 30])
-        detalhes.append("Troca de Croupier em Vizinho do Zero: Cobertura Terminais 0")
+        detalhes.append("Croupier trocou em área de Zero")
 
-    # 6. Análise Temporal da Esteira (Janela de 14 Posições)
+    # 6. Esteira
     esteira_14 = historico[-14:]
     reincidencia_recente = [num for num in alvos if num in esteira_14[-3:]]
     if reincidencia_recente:
         score += 1
-        detalhes.append(f"Esteira 14p: Alvo(s) {reincidencia_recente} quente(s) na ponta da esteira")
+        detalhes.append(f"Reincidência Quente: {reincidencia_recente}")
 
-    # 7. Setor Dominante do Racetrack (Voisins, Tiers, Orphelins, Zero Spiel)
+    # 7. Setor Dominante do Racetrack
     if len(historico) >= 10:
         foco_10 = historico[-10:]
         contagem_setores = {setor: 0 for setor in SETORES_ROLETA}
@@ -234,25 +218,24 @@ def motor_de_scoragem(historico, houve_troca):
             for setor, numeros in SETORES_ROLETA.items():
                 if num in numeros:
                     contagem_setores[setor] += 1
-        
         setor_dominante = max(contagem_setores, key=contagem_setores.get)
         alvos_no_setor = [num for num in alvos if num in SETORES_ROLETA[setor_dominante]]
         if alvos_no_setor:
             score += 1
-            detalhes.append(f"Racetrack: Setor Dominante `{setor_dominante}` alinhado com os alvos")
+            detalhes.append(f"Racetrack Dominante: `{setor_dominante}`")
 
     score_final = min(score, 5)
     return score_final, list(alvos), detalhes
 
 # ==========================================
-# 4. INTERFACE GRÁFICA STREAMLIT
+# 4. INTERFACE STREAMLIT
 # ==========================================
-st.title("🎯 Painel Preditivo de Roleta - Motor de Scoragem Avançado")
+st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
 if "historico" not in st.session_state:
     st.session_state.historico = []
 
-# Sidebar para Inserção de Dados
+# Sidebar
 st.sidebar.header("🕹️ Painel de Operação")
 novo_numero = st.sidebar.number_input("Número Sorteado:", min_value=0, max_value=36, step=1)
 houve_troca = st.sidebar.checkbox("Troca de Croupier?")
@@ -263,7 +246,7 @@ if c1.button("Adicionar"):
 if c2.button("Limpar"):
     st.session_state.historico = []
 
-# Exibição Visual da Esteira (14 Posições)
+# Esteira Visual
 st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
 if st.session_state.historico:
     esteira = st.session_state.historico[-14:]
@@ -271,10 +254,8 @@ if st.session_state.historico:
     for i, num in enumerate(esteira):
         with cols[i]:
             st.metric(label=f"Pos {i+1:02d}", value=num)
-else:
-    st.info("Insira rodadas no painel lateral para iniciar os cálculos.")
 
-# Processamento Principal
+# Processamento
 if st.session_state.historico:
     ultimo = st.session_state.historico[-1]
     score, alvos_sinal, logs = motor_de_scoragem(st.session_state.historico, houve_troca)
@@ -284,16 +265,25 @@ if st.session_state.historico:
     
     with col_score:
         st.markdown("**Pontuação Acumulada**")
-        st.metric(label="Score do Sinal", value=f"{score} / 5 Pontos")
+        st.metric(label="Score do Sinal", value=f"{score} / 5")
+        
         if score <= 2:
-            st.info("Status: AGUARDAR (Sem convergência forte)")
+            st.info("Status: AGUARDAR")
         elif score == 3:
-            st.warning("Status: PRÉ-ALERTA (Preparar ficha no valor base)")
+            st.warning("Status: PRÉ-ALERTA")
         else:
-            st.error(f"🚨 CONFIRMAÇÃO DE ENTRADA: {alvos_sinal}")
+            st.error(f"🚨 SINAL CONFIRMADO: {alvos_sinal}")
+            
+            # Botão manual de teste de envio
+            if st.button("📤 Testar Envio para o Telegram"):
+                sucesso, msg = enviar_alerta_telegram(ultimo, score, alvos_sinal, logs)
+                if sucesso:
+                    st.success(msg)
+                else:
+                    st.error(msg)
 
     with col_fisiologia:
-        st.markdown("**Fisiologia Física da Mesa**")
+        st.markdown("**Fisiologia da Mesa**")
         viz = obter_vizinhos_mesa(ultimo)
         st.write(f"Último Número: **{ultimo}**")
         st.write(f"Esq: **{viz['esquerda_2']} | {viz['esquerda_1']}**")
@@ -301,14 +291,14 @@ if st.session_state.historico:
         st.write(f"Camuflados: **{obter_camuflados(ultimo)}**")
 
     with col_analise:
-        st.markdown("**Convergência dos Filtros**")
+        st.markdown("**Filtros Convergentes**")
         for log in logs:
             st.write(f"✔️ {log}")
 
-    # Módulo A/B Benchmark de Assertividade
+    # A/B Benchmark de Assertividade
     if len(st.session_state.historico) >= 50:
         st.markdown("---")
         st.subheader("⚡ A/B Benchmark (Fixo vs. Dinâmico)")
         bench = realizar_benchmark_modelos(st.session_state.historico)
-        st.write(f"**Modelo Dominante da Mesa:** `{bench['modelo_vencedor']}`")
-        st.write(f"Assertividade Fixo: `{bench['taxa_fixo']}%` | Assertividade Dinâmico: `{bench['taxa_dinamico']}%`")
+        st.write(f"**Modelo Dominante:** `{bench['modelo_vencedor']}`")
+        st.write(f"Fixo: `{bench['taxa_fixo']}%` | Dinâmico: `{bench['taxa_dinamico']}%`")
