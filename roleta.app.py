@@ -1,11 +1,16 @@
 import streamlit as st
 import pandas as pd
 import requests
+import json
+from streamlit_autorefresh import st_autorefresh
 
 # ==========================================
 # 1. CONFIGURAÇÃO E CREDENCIAIS SEGURAS
 # ==========================================
 st.set_page_config(page_title="Radar de Roleta Pro - Motor Avançado", layout="wide")
+
+# Atualização automática da página a cada 5 segundos (5000ms)
+st_autorefresh(interval=5000, key="autoupdate_roleta")
 
 try:
     TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "7779371878:AAGFkAZFV1y51JMMoyhEAJO-xrDryNw-vBw")
@@ -51,7 +56,36 @@ TABELA_PUXADORES_FIXA = {
 }
 
 # ==========================================
-# 2. FUNÇÕES AUXILIARES & TELEGRAM
+# 2. FUNÇÃO DE INTEGRAÇÃO MULTI-ROLETA (API/URL)
+# ==========================================
+# Dicionário configurado com as URLs de cada Roleta
+URLS_ROLETAS = {
+    "Immersive Roulette": "SUA_URL_IMMERSIVE_AQUI",
+    "Auto-Roulette": "SUA_URL_AUTO_ROULETTE_AQUI"
+}
+
+def buscar_dados_roleta_url(roleta_selecionada):
+    url_api = URLS_ROLETAS.get(roleta_selecionada, "")
+    
+    if not url_api or "AQUI" in url_api:
+        return []
+        
+    try:
+        res = requests.get(url_api, timeout=3)
+        if res.status_code == 200:
+            dados = res.json()
+            # Trata o formato de resposta extraindo recentResults (padrão Evolution/EsportesDaSorte)
+            resultados_brutos = dados.get("args", {}).get("recentResults", [])
+            if not resultados_brutos and isinstance(dados, list):
+                resultados_brutos = dados
+            numeros = [int(str(n).replace("[", "").replace("]", "").replace('"', '')) for n in resultados_brutos]
+            return numeros[::-1]  # Ordem cronológica (antigo -> recente)
+    except Exception:
+        pass
+    return []
+
+# ==========================================
+# 3. FUNÇÕES AUXILIARES & TELEGRAM
 # ==========================================
 def enviar_mensagem_telegram(mensagem):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
@@ -129,7 +163,7 @@ def checar_estrategia_fantasma(historico):
     return {"status": "INATIVO"}
 
 # ==========================================
-# 3. MOTOR DE SCORAGE & PROCESSAMENTO DE LINHA
+# 4. MOTOR DE SCORAGE & PROCESSAMENTO
 # ==========================================
 def analisar_rodada_especifica(sub_historico, houve_troca=False):
     if not sub_historico:
@@ -215,7 +249,7 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     }
 
 # ==========================================
-# 4. INTERFACE STREAMLIT
+# 5. INTERFACE STREAMLIT
 # ==========================================
 st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
@@ -228,43 +262,88 @@ if "sinal_ativo" not in st.session_state:
     st.session_state.tentativa_atual = 0
     st.session_state.ultimo_resultado = None
 
-# Sidebar
+# --- PAINEL DE OPERAÇÃO (BARRA LATERAL) ---
 st.sidebar.header("🕹️ Painel de Operação")
-novo_numero = st.sidebar.number_input("Número Sorteado:", min_value=0, max_value=36, step=1)
-houve_troca = st.sidebar.checkbox("Troca de Croupier?")
 
-c1, c2 = st.sidebar.columns(2)
+# 1. Caixa de seleção: Modo On-line vs Off-line
+modo_operacao = st.sidebar.selectbox(
+    "🌐 Modo de Operação:",
+    ["On-line (Captura Automática)", "Off-line (Digitação Manual)"]
+)
 
-if c1.button("Adicionar"):
-    num = int(novo_numero)
-    st.session_state.historico.append(num)
+# 2. Caixa de seleção: Roleta Ativa
+roleta_selecionada = st.sidebar.selectbox(
+    "🎰 Selecionar Roleta:",
+    ["Cassino ao Vivo Immersive Roulette", "Cassino ao Vivo Auto-Roulette"]
+)
+
+# Mapeia nome amigável para chave da URL
+chave_roleta = "Immersive Roulette" if "Immersive" in roleta_selecionada else "Auto-Roulette"
+
+st.sidebar.markdown("---")
+
+# --- LÓGICA DE CAPTURA ON-LINE / MANUAL ---
+if modo_operacao == "On-line (Captura Automática)":
+    st.sidebar.info(f"🟢 Conectado em tempo real: **{roleta_selecionada}**")
+    novos_dados = buscar_dados_roleta_url(chave_roleta)
     
-    if st.session_state.sinal_ativo:
-        st.session_state.tentativa_atual += 1
-        etapas = {1: "Entrada Direta", 2: "Gale 1 (G1)", 3: "Gale 2 (G2)"}
-        etapa_nome = etapas.get(st.session_state.tentativa_atual, f"Gale {st.session_state.tentativa_atual-1}")
+    if novos_dados and novos_dados != st.session_state.historico:
+        st.session_state.historico = novos_dados
+        num_novo = novos_dados[-1]
         
-        alvos_com_zero = set(st.session_state.alvos_sinal + [0])
+        # Validação do Sinal
+        if st.session_state.sinal_ativo:
+            st.session_state.tentativa_atual += 1
+            etapas = {1: "Entrada Direta", 2: "Gale 1 (G1)", 3: "Gale 2 (G2)"}
+            etapa_nome = etapas.get(st.session_state.tentativa_atual, f"Gale {st.session_state.tentativa_atual-1}")
+            
+            alvos_com_zero = set(st.session_state.alvos_sinal + [0])
+            if num_novo in alvos_com_zero:
+                st.session_state.ultimo_resultado = f"GREEN ✅ ({etapa_nome})"
+                enviar_resultado_telegram("GREEN", num_novo, etapa_nome)
+                st.session_state.sinal_ativo = False
+                st.session_state.tentativa_atual = 0
+            elif st.session_state.tentativa_atual >= 3:
+                st.session_state.ultimo_resultado = "LOSS / RED ❌"
+                enviar_resultado_telegram("LOSS", num_novo)
+                st.session_state.sinal_ativo = False
+                st.session_state.tentativa_atual = 0
+
+else:
+    st.sidebar.warning(f"🟠 Modo Manual ativo: **{roleta_selecionada}**")
+    novo_numero = st.sidebar.number_input("Número Sorteado (Manual):", min_value=0, max_value=36, step=1)
+    houve_troca_manual = st.sidebar.checkbox("Troca de Croupier?")
+    
+    col1, col2 = st.sidebar.columns(2)
+    if col1.button("Adicionar"):
+        num = int(novo_numero)
+        st.session_state.historico.append(num)
         
-        if num in alvos_com_zero:
-            st.session_state.ultimo_resultado = f"GREEN ✅ ({etapa_nome})"
-            enviar_resultado_telegram("GREEN", num, etapa_nome)
-            st.session_state.sinal_ativo = False
-            st.session_state.tentativa_atual = 0
-        elif st.session_state.tentativa_atual >= 3:
-            st.session_state.ultimo_resultado = "LOSS / RED ❌"
-            enviar_resultado_telegram("LOSS", num)
-            st.session_state.sinal_ativo = False
-            st.session_state.tentativa_atual = 0
+        if st.session_state.sinal_ativo:
+            st.session_state.tentativa_atual += 1
+            etapas = {1: "Entrada Direta", 2: "Gale 1 (G1)", 3: "Gale 2 (G2)"}
+            etapa_nome = etapas.get(st.session_state.tentativa_atual, f"Gale {st.session_state.tentativa_atual-1}")
+            
+            alvos_com_zero = set(st.session_state.alvos_sinal + [0])
+            if num in alvos_com_zero:
+                st.session_state.ultimo_resultado = f"GREEN ✅ ({etapa_nome})"
+                enviar_resultado_telegram("GREEN", num, etapa_nome)
+                st.session_state.sinal_ativo = False
+                st.session_state.tentativa_atual = 0
+            elif st.session_state.tentativa_atual >= 3:
+                st.session_state.ultimo_resultado = "LOSS / RED ❌"
+                enviar_resultado_telegram("LOSS", num)
+                st.session_state.sinal_ativo = False
+                st.session_state.tentativa_atual = 0
 
-if c2.button("Limpar"):
-    st.session_state.historico = []
-    st.session_state.sinal_ativo = False
-    st.session_state.alvos_sinal = []
-    st.session_state.tentativa_atual = 0
-    st.session_state.ultimo_resultado = None
+    if col2.button("Limpar"):
+        st.session_state.historico = []
+        st.session_state.sinal_ativo = False
+        st.session_state.alvos_sinal = []
+        st.session_state.tentativa_atual = 0
+        st.session_state.ultimo_resultado = None
 
-# Esteira Visual Simples
+# --- VISUALIZAÇÃO DOS DADOS ---
 st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
 if st.session_state.historico:
     esteira = st.session_state.historico[-14:]
@@ -279,17 +358,17 @@ if st.session_state.ultimo_resultado:
     else:
         st.error(f"⚠️ Resultado do Último Sinal: **{st.session_state.ultimo_resultado}**")
 
-# TABELA ANALÍTICA ESTILO PLANILHA
+# --- MAPEAMENTO ANALÍTICO DA MESA ---
 if st.session_state.historico:
     st.markdown("---")
-    st.subheader("📊 Mapeamento Analítico da Mesa")
+    st.subheader(f"📊 Mapeamento Analítico - {roleta_selecionada}")
     
     dados_tabela = []
     janela_exibicao = st.session_state.historico[-14:]
     
     for idx, num in enumerate(janela_exibicao):
         sub_hist = st.session_state.historico[:len(st.session_state.historico) - len(janela_exibicao) + idx + 1]
-        res = analisar_rodada_especifica(sub_hist, houve_troca=(houve_troca if idx == len(janela_exibicao)-1 else False))
+        res = analisar_rodada_especifica(sub_hist)
         
         dados_tabela.append({
             "Posição": f"Pos {idx+1:02d}",
@@ -310,8 +389,8 @@ if st.session_state.historico:
     df_exibicao = pd.DataFrame(dados_tabela)
     st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
 
-    # Ação no último sinal
-    res_ultimo = analisar_rodada_especifica(st.session_state.historico, houve_troca)
+    # Disparo de Alerta do Último Sinal
+    res_ultimo = analisar_rodada_especifica(st.session_state.historico)
     if res_ultimo["score_num"] >= 4:
         st.error(f"🚨 SINAL CONFIRMADO: {res_ultimo['alvos']}")
         if not st.session_state.sinal_ativo and st.session_state.alvos_sinal != res_ultimo["alvos"]:
