@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import requests
+import cloudscraper
 from streamlit_autorefresh import st_autorefresh
 
 # ==========================================
@@ -71,13 +71,18 @@ def buscar_dados_roleta_url(roleta_nome):
         return st.session_state.get("historico", [])
         
     try:
+        # Instancia o scraper do cloudscraper para simular um navegador real
+        scraper = cloudscraper.create_scraper()
+        
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
             "Referer": "https://esportesdasorte.bet.br/",
             "Origin": "https://esportesdasorte.bet.br"
         }
-        res = requests.get(endpoint, headers=headers, timeout=5)
+        
+        res = scraper.get(endpoint, headers=headers, timeout=10)
+        
         if res.status_code == 200:
             dados = res.json()
             
@@ -121,7 +126,8 @@ def enviar_mensagem_telegram(mensagem):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "Markdown"}
     try:
-        res = requests.post(url, json=payload, timeout=5)
+        scraper = cloudscraper.create_scraper()
+        res = scraper.post(url, json=payload, timeout=5)
         return (True, "Enviado com sucesso!") if res.status_code == 200 else (False, res.text)
     except Exception as e:
         return False, str(e)
