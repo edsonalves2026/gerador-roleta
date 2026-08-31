@@ -85,7 +85,6 @@ def buscar_dados_roleta_url(roleta_nome):
         res = requests.get(endpoint, headers=headers, timeout=4)
         if res.status_code == 200:
             dados = res.json()
-            # Parser para a estrutura "roulette.recentResults" do WebSocket/API
             if isinstance(dados, dict):
                 args = dados.get("args", {})
                 recent = args.get("recentResults", [])
@@ -96,7 +95,6 @@ def buscar_dados_roleta_url(roleta_nome):
                 
             numeros = []
             for item in recent:
-                # Extrai o número limpo caso venha como lista ['4'] ou string
                 if isinstance(item, list) and len(item) > 0:
                     val = str(item[0])
                 else:
@@ -105,28 +103,7 @@ def buscar_dados_roleta_url(roleta_nome):
                 if val_clean.isdigit():
                     numeros.append(int(val_clean))
             
-            # Retorna na ordem cronológica (do mais antigo para o mais recente)
-            return numeros[::-1]
-    except Exception:
-        pass
-    return []
-
-def buscar_dados_roleta_url(roleta_selecionada):
-    url_api = URLS_ROLETAS.get(roleta_selecionada, "")
-    
-    if not url_api or "AQUI" in url_api:
-        return []
-        
-    try:
-        res = requests.get(url_api, timeout=3)
-        if res.status_code == 200:
-            dados = res.json()
-            # Trata o formato de resposta extraindo recentResults (padrão Evolution/EsportesDaSorte)
-            resultados_brutos = dados.get("args", {}).get("recentResults", [])
-            if not resultados_brutos and isinstance(dados, list):
-                resultados_brutos = dados
-            numeros = [int(str(n).replace("[", "").replace("]", "").replace('"', '')) for n in resultados_brutos]
-            return numeros[::-1]  # Ordem cronológica (antigo -> recente)
+            return numeros[::-1]  # Cronológico (antigo -> recente)
     except Exception:
         pass
     return []
@@ -312,27 +289,22 @@ if "sinal_ativo" not in st.session_state:
 # --- PAINEL DE OPERAÇÃO (BARRA LATERAL) ---
 st.sidebar.header("🕹️ Painel de Operação")
 
-# 1. Caixa de seleção: Modo On-line vs Off-line
 modo_operacao = st.sidebar.selectbox(
     "🌐 Modo de Operação:",
     ["On-line (Captura Automática)", "Off-line (Digitação Manual)"]
 )
 
-# 2. Caixa de seleção: Roleta Ativa
 roleta_selecionada = st.sidebar.selectbox(
     "🎰 Selecionar Roleta:",
-    ["Cassino ao Vivo Immersive Roulette", "Cassino ao Vivo Auto-Roulette"]
+    list(URLS_ROLETAS.keys())
 )
-
-# Mapeia nome amigável para chave da URL
-chave_roleta = "Immersive Roulette" if "Immersive" in roleta_selecionada else "Auto-Roulette"
 
 st.sidebar.markdown("---")
 
 # --- LÓGICA DE CAPTURA ON-LINE / MANUAL ---
 if modo_operacao == "On-line (Captura Automática)":
     st.sidebar.info(f"🟢 Conectado em tempo real: **{roleta_selecionada}**")
-    novos_dados = buscar_dados_roleta_url(chave_roleta)
+    novos_dados = buscar_dados_roleta_url(roleta_selecionada)
     
     if novos_dados and novos_dados != st.session_state.historico:
         st.session_state.historico = novos_dados
