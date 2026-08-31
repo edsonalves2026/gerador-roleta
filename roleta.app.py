@@ -1,6 +1,48 @@
 import streamlit as st
 import pandas as pd
 from collections import Counter
+import websocket
+import json
+
+# URL da conexão WebSocket capturada do DevTools (aba Network > WS)
+# Nota: substitua pela URL exata da sua sessão se houver token dinâmico
+WS_URL = "wss://esportesdasorte.bet.br/socket?messageFormat=json&EVOSESSIONID=..." 
+
+def ao_receber_mensagem(ws, mensagem):
+    try:
+        dados = json.loads(mensagem)
+        tipo = dados.get("type")
+        
+        # Captura a lista inicial com os números recentes
+        if tipo == "roulette.recentResults":
+            resultados = dados.get("args", {}).get("recentResults", [])
+            numeros = [int(n) for n in resultados if str(n).isdigit()]
+            print(f"Histórico Inicial Carregado: {numeros}")
+
+        # Captura o novo número sorteado em tempo real na virada de rodada
+        elif tipo == "roulette.tableState" and dados.get("args", {}).get("state") == "GAME_RESOLVED":
+            resultado_bruto = dados.get("args", {}).get("result", [])
+            if resultado_bruto:
+                novo_numero = int(resultado_bruto[0])
+                print(f"🚨 NOVO SORTEIO DETECTADO: {novo_numero}")
+
+    except Exception as e:
+        print(f"Erro ao processar mensagem: {e}")
+
+def ao_abrir(ws):
+    print("Conectado ao WebSocket da Evolution!")
+
+def ao_fechar(ws, status, msg):
+    print("Conexão encerrada.")
+
+if __name__ == "__main__":
+    ws = websocket.WebSocketApp(
+        WS_URL,
+        on_message=ao_receber_mensagem,
+        on_open=ao_abrir,
+        on_close=ao_fechar
+    )
+    ws.run_forever()
 
 # ==========================================
 # 1. CONFIGURAÇÃO E CONSTANTES FÍSICAS
