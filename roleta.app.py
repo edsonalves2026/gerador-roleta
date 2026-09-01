@@ -59,9 +59,6 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 ]
 
-# ==========================================
-# 2. URLs com LIMIT=1000 ✅
-# ==========================================
 URLS_ROLETAS = {
     "Cassino ao Vivo Immersive Roulette": {
         "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-f3703302d5cc/history?timezone=America%2FSao_Paulo&subject=filter&limit=1000"
@@ -72,7 +69,7 @@ URLS_ROLETAS = {
 }
 
 # ==========================================
-# FUNÇÃO DE BUSCA
+# 2. FUNÇÃO DE BUSCA DA API
 # ==========================================
 def buscar_dados_roleta_url(roleta_nome):
     config = URLS_ROLETAS.get(roleta_nome, {})
@@ -142,10 +139,12 @@ def enviar_mensagem_telegram(mensagem):
     except Exception as e:
         return False, str(e)
 
-def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes):
+def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes, tier_nome=""):
     texto_detalhes = "\n".join([f"• {d}" for d in detalhes])
+    prefixo_tier = f"🏆 *Classificação:* `{tier_nome}`\n" if tier_nome else ""
     mensagem = (
         f"🚨 *SINAL CONFIRMADO - RADAR DE ROLETA*\n\n"
+        f"{prefixo_tier}"
         f"📌 *Último Número:* `{ultimo_num}`\n"
         f"📊 *Score de Assertividade:* `{score}/5`\n"
         f"🎯 *Alvos Sugeridos:* `{alvos}`\n"
@@ -207,7 +206,55 @@ def checar_estrategia_fantasma(historico):
     return {"status": "INATIVO"}
 
 # ==========================================
-# 4. MOTOR DE SCORAGE & PROCESSAMENTO
+# 4. CLASSIFICADOR DE TIERS (200 RODADAS)
+# ==========================================
+def classificar_padroes_200_rodadas(historico_completo):
+    """
+    Analisa a janela das últimas 200 rodadas para gerar o ranking de assertividade.
+    """
+    amostra_200 = list(reversed(historico_completo[:200]))
+    if len(amostra_200) < 20:
+        return {}, pd.DataFrame()
+
+    registros = []
+    for idx in range(10, len(amostra_200) - 2):
+        sub_hist = amostra_200[:idx]
+        res = analisar_rodada_especifica(sub_hist)
+        
+        if res["score_num"] >= 4:
+            futuro = amostra_200[idx:idx+3] # Direto, G1, G2
+            alvos_zero = set(res["alvos"] + [0])
+            hit = any(n in alvos_zero for n in futuro)
+            
+            registros.append({
+                "Padrao": res["padrao_nome"],
+                "Resultado": "GREEN" if hit else "RED"
+            })
+
+    if not registros:
+        return {}, pd.DataFrame()
+
+    df_reg = pd.DataFrame(registros)
+    estudo = df_reg.groupby("Padrao").agg(
+        Total=("Resultado", "count"),
+        Greens=("Resultado", lambda x: (x == "GREEN").sum())
+    ).reset_index()
+
+    estudo["WinRate"] = (estudo["Greens"] / estudo["Total"]) * 100
+    estudo_ordenado = estudo.sort_values(by=["WinRate", "Total"], ascending=[False, False])
+    lista_ordenada = estudo_ordenado["Padrao"].tolist()
+
+    tiers = {
+        "ELITE_TOP_3": lista_ordenada[:3],
+        "SELECAO_OURO_TOP_5": lista_ordenada[:5],
+        "SELECAO_TOP_10": lista_ordenada[:10],
+        "RADAR_TOP_30": lista_ordenada[:30]
+    }
+    
+    return tiers, estudo_ordenado
+
+# ==========================================
+# 5. MOTOR DE SCORAGE & PROCESSAMENTO
 # ==========================================
 def analisar_rodada_especifica(sub_historico, houve_troca=False):
     if not sub_historico:
@@ -216,43 +263,43 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     ultimo = sub_historico[-1]
     score = 0
     alvos = set()
-    filtros_ativos_cnt = 0
+    filtros_ativos = []
 
     puxadores = obter_puxadores_otimizados(ultimo, sub_historico)
     if puxadores:
         score += 1
-        filtros_ativos_cnt += 1
+        filtros_ativos.append("Puxadores")
         alvos.update(puxadores[:2])
 
     vizinhos = obter_vizinhos_mesa(ultimo)
     score += 1
-    filtros_ativos_cnt += 1
+    filtros_ativos.append("Vizinhos")
     alvos.update([vizinhos["esq_1"], vizinhos["dir_1"]])
 
     invertido = obter_dezena_invertida(ultimo)
     str_inversao = f"{ultimo}➔{invertido}" if invertido is not None else "-"
     if invertido is not None:
         score += 1
-        filtros_ativos_cnt += 1
+        filtros_ativos.append("Inversão")
         alvos.add(invertido)
 
     fantasma = checar_estrategia_fantasma(sub_historico)
     if fantasma["status"] == "ATIVADO":
         score += 1
-        filtros_ativos_cnt += 1
+        filtros_ativos.append("Fantasma")
         alvos.update(fantasma["principais"])
 
     vizinhos_zero = [1, 5, 8, 11, 14, 23, 26, 32]
     if houve_troca and ultimo in vizinhos_zero:
         score += 1
-        filtros_ativos_cnt += 1
+        filtros_ativos.append("VizinhosZero")
         alvos.update([0, 10, 20, 30])
 
     esteira_14 = sub_historico[-14:]
     reincidencia = [num for num in alvos if num in esteira_14[-3:]]
     if reincidencia:
         score += 1
-        filtros_ativos_cnt += 1
+        filtros_ativos.append("Reincidência")
 
     setor_dom = "-"
     if len(sub_historico) >= 10:
@@ -265,16 +312,11 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
         setor_dom = max(contagem, key=contagem.get)
         if any(num in SETORES_ROLETA[setor_dom] for num in alvos):
             score += 1
-            filtros_ativos_cnt += 1
+            filtros_ativos.append("Racetrack")
 
     score_final = min(score, 5)
     alvos_ordenados = sorted(list(alvos))
-    
-    status_str = "AGUARDAR"
-    if score_final == 3:
-        status_str = "PRÉ-ALERTA"
-    elif score_final >= 4:
-        status_str = f"SINAL CONFIRMADO: {alvos_ordenados}"
+    padrao_nome = " + ".join(filtros_ativos) if filtros_ativos else "Geral"
 
     return {
         "ultimo": ultimo,
@@ -286,15 +328,16 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
         "racetrack": setor_dom,
         "inversao": str_inversao,
         "reincidencia": str(reincidencia) if reincidencia else "-",
-        "confirmacoes": "🔴 " * filtros_ativos_cnt,
+        "confirmacoes": "🔴 " * len(filtros_ativos),
         "score": f"{score_final}/5",
-        "status": status_str,
+        "status": "AGUARDAR" if score_final < 4 else f"SINAL: {alvos_ordenados}",
         "alvos": alvos_ordenados,
-        "score_num": score_final
+        "score_num": score_final,
+        "padrao_nome": padrao_nome
     }
 
 # ==========================================
-# 5. INTERFACE STREAMLIT
+# 6. INTERFACE STREAMLIT
 # ==========================================
 st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
@@ -306,6 +349,7 @@ if "sinal_ativo" not in st.session_state:
     st.session_state.tentativa_atual = 0
     st.session_state.ultimo_resultado = None
 
+# Painel Lateral de Configurações
 st.sidebar.header("🕹️ Painel de Operação")
 modo_operacao = st.sidebar.selectbox(
     "🌐 Modo de Operação:",
@@ -315,9 +359,32 @@ roleta_selecionada = st.sidebar.selectbox(
     "🎰 Selecionar Roleta:",
     list(URLS_ROLETAS.keys())
 )
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("🎛️ Filtro Híbrido de Assertividade (200 Rodadas)")
+
+filtro_hibrido_opcao = st.sidebar.selectbox(
+    "Nível de Filtragem dos Sinais:",
+    [
+        "Desativado (Usar apenas regras fixas)",
+        "🥉 Radar (Top 30 - Permissivo)",
+        "🥈 Seleção (Top 10 - Equilibrado)",
+        "🥇 Seleção Ouro (Top 5 - Conservador)",
+        "👑 Elite (Top 3 - Máxima Precisão)"
+    ],
+    index=2
+)
+
+modo_gale_opcao = st.sidebar.radio(
+    "Estratégia no Gale ao detectar novo Sinal Elite:",
+    ["Opção A: Mantém Sinal A (Aposta Fixa)", "Opção B: Fusão de Alvos Únicos (A + B)"],
+    index=1
+)
+
 st.sidebar.markdown("---")
 
 def processar_novo_numero(num_novo):
+    # Tratamento de Gale e Verificação de Resultado
     if st.session_state.sinal_ativo:
         st.session_state.tentativa_atual += 1
         etapas = {1: "Entrada Direta", 2: "Gale 1 (G1)", 3: "Gale 2 (G2)"}
@@ -329,11 +396,67 @@ def processar_novo_numero(num_novo):
             enviar_resultado_telegram("GREEN", num_novo, etapa_nome)
             st.session_state.sinal_ativo = False
             st.session_state.tentativa_atual = 0
+            st.session_state.alvos_sinal = []
+            return
         elif st.session_state.tentativa_atual >= 3:
             st.session_state.ultimo_resultado = "LOSS / RED ❌"
             enviar_resultado_telegram("LOSS", num_novo)
             st.session_state.sinal_ativo = False
             st.session_state.tentativa_atual = 0
+            st.session_state.alvos_sinal = []
+            return
+
+    # Processamento de Nova Entrada
+    if len(st.session_state.historico) >= 20:
+        historico_analise = list(reversed(st.session_state.historico))
+        res_ultimo = analisar_rodada_especifica(historico_analise)
+        
+        # Filtro estático mínimo
+        if res_ultimo["score_num"] >= 4:
+            tiers, df_rank = classificar_padroes_200_rodadas(st.session_state.historico)
+            padrao = res_ultimo["padrao_nome"]
+            
+            tier_do_padrao = "Fora dos Tiers"
+            if padrao in tiers.get("ELITE_TOP_3", []):
+                tier_do_padrao = "👑 Elite (Top 3)"
+            elif padrao in tiers.get("SELECAO_OURO_TOP_5", []):
+                tier_do_padrao = "🥇 Seleção Ouro (Top 5)"
+            elif padrao in tiers.get("SELECAO_TOP_10", []):
+                tier_do_padrao = "🥈 Seleção (Top 10)"
+            elif padrao in tiers.get("RADAR_TOP_30", []):
+                tier_do_padrao = "🥉 Radar (Top 30)"
+
+            # Verificação de Permissão do Filtro Híbrido
+            permitido = False
+            if filtro_hibrido_opcao == "Desativado (Usar apenas regras fixas)":
+                permitido = True
+            elif filtro_hibrido_opcao == "🥉 Radar (Top 30 - Permissivo)" and tier_do_padrao in ["👑 Elite (Top 3)", "🥇 Seleção Ouro (Top 5)", "🥈 Seleção (Top 10)", "🥉 Radar (Top 30)"]:
+                permitido = True
+            elif filtro_hibrido_opcao == "🥈 Seleção (Top 10 - Equilibrado)" and tier_do_padrao in ["👑 Elite (Top 3)", "🥇 Seleção Ouro (Top 5)", "🥈 Seleção (Top 10)"]:
+                permitido = True
+            elif filtro_hibrido_opcao == "🥇 Seleção Ouro (Top 5 - Conservador)" and tier_do_padrao in ["👑 Elite (Top 3)", "🥇 Seleção Ouro (Top 5)"]:
+                permitido = True
+            elif filtro_hibrido_opcao == "👑 Elite (Top 3 - Máxima Precisão)" and tier_do_padrao == "👑 Elite (Top 3)":
+                permitido = True
+
+            # Lógica de Fusão no Gale se já houver sinal ativo
+            if st.session_state.sinal_ativo:
+                if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
+                    alvos_novos = [n for n in res_ultimo["alvos"] if n not in st.session_state.alvos_sinal]
+                    if alvos_novos:
+                        st.session_state.alvos_sinal.extend(alvos_novos)
+                        enviar_mensagem_telegram(f"🔄 *FUSÃO DE ALVOS (GALE)*\nNovos alvos adicionados: `{alvos_novos}`\nAlvos Totais: `{st.session_state.alvos_sinal}`")
+            elif permitido:
+                st.session_state.sinal_ativo = True
+                st.session_state.alvos_sinal = res_ultimo["alvos"]
+                st.session_state.tentativa_atual = 0
+                enviar_alerta_telegram(
+                    res_ultimo["ultimo"], 
+                    res_ultimo["score_num"], 
+                    res_ultimo["alvos"], 
+                    [f"Padrão: {padrao}", f"Filtro: {filtro_hibrido_opcao}"],
+                    tier_nome=tier_do_padrao
+                )
 
 if modo_operacao == "On-line (Captura Automática)":
     st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
@@ -405,19 +528,27 @@ if st.session_state.historico:
     df_exibicao = pd.DataFrame(dados_tabela)
     st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
 
-    # Disparo de Alerta
+    # Tabela do Ranking das 200 Rodadas
+    tiers_atuais, df_rank = classificar_padroes_200_rodadas(st.session_state.historico)
+    with st.expander("🏆 Ranking dos Padrões (Últimas 200 Rodadas)", expanded=False):
+        if not df_rank.empty:
+            st.dataframe(df_rank, use_container_width=True, hide_index=True)
+        else:
+            st.write("Aguardando histórico suficiente para consolidação do ranking.")
+
+    # Disparo de Alerta Manual / Status
     historico_analise = list(reversed(st.session_state.historico))
     res_ultimo = analisar_rodada_especifica(historico_analise)
     if res_ultimo["score_num"] >= 4:
-        st.error(f"🚨 SINAL CONFIRMADO: {res_ultimo['alvos']}")
-        if not st.session_state.sinal_ativo and st.session_state.alvos_sinal != res_ultimo["alvos"]:
-            st.session_state.sinal_ativo = True
-            st.session_state.alvos_sinal = res_ultimo["alvos"]
-            st.session_state.tentativa_atual = 0
-            enviar_alerta_telegram(res_ultimo["ultimo"], res_ultimo["score_num"], res_ultimo["alvos"], [res_ultimo["status"]])
+        st.error(f"🚨 SINAL IDENTIFICADO: {res_ultimo['alvos']}")
             
         if st.button("📤 Reenviar Alerta para Telegram"):
-            sucesso, msg = enviar_alerta_telegram(res_ultimo["ultimo"], res_ultimo["score_num"], res_ultimo["alvos"], [res_ultimo["status"]])
+            sucesso, msg = enviar_alerta_telegram(
+                res_ultimo["ultimo"], 
+                res_ultimo["score_num"], 
+                res_ultimo["alvos"], 
+                [res_ultimo["status"]]
+            )
             if sucesso:
                 st.success(msg)
             else:
@@ -426,7 +557,7 @@ else:
     st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # ==========================================
-# 6. ESTATÍSTICAS — SLIDER ATÉ 1000 ✅
+# 7. ESTATÍSTICAS — SLIDER ATÉ 1000
 # ==========================================
 if st.session_state.historico:
     st.markdown("---")
