@@ -60,19 +60,19 @@ USER_AGENTS = [
 ]
 
 # ==========================================
-# 2. URLs CORRIGIDAS com UUIDs REAIS ✅
+# 2. URLs com LIMIT=1000 ✅
 # ==========================================
 URLS_ROLETAS = {
     "Cassino ao Vivo Immersive Roulette": {
-        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-f3703302d5cc/history?timezone=America%2FSao_Paulo&subject=filter&limit=500"
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-f3703302d5cc/history?timezone=America%2FSao_Paulo&subject=filter&limit=1000"
     },
     "Cassino ao Vivo Swedish Roulette": {
-        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-40d2-b479-a28a01c6ee13/history?timezone=America%2FSao_Paulo&subject=filter&limit=500"
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-40d2-b479-a28a01c6ee13/history?timezone=America%2FSao_Paulo&subject=filter&limit=1000"
     }
 }
 
 # ==========================================
-# FUNÇÃO DE BUSCA AJUSTADA ✅
+# FUNÇÃO DE BUSCA
 # ==========================================
 def buscar_dados_roleta_url(roleta_nome):
     config = URLS_ROLETAS.get(roleta_nome, {})
@@ -83,7 +83,6 @@ def buscar_dados_roleta_url(roleta_nome):
         return st.session_state.get("historico", [])
         
     try:
-        # Adiciona parâmetro t=timestamp como o site faz
         t_param = f"&t={int(time.time() * 1000)}"
         url_completo = endpoint + t_param
         
@@ -96,14 +95,13 @@ def buscar_dados_roleta_url(roleta_nome):
         }
         
         st.sidebar.info(f"🔄 Consultando: {roleta_nome}")
-        res = requests.get(url_completo, headers=headers, timeout=10)
+        res = requests.get(url_completo, headers=headers, timeout=15)  # Timeout aumentado
         st.sidebar.text(f"Status HTTP: {res.status_code}")
         
         if res.status_code == 200:
             dados = res.json()
             numeros = []
             
-            # ✅ ESTRUTURA REAL: lista direta, campo "result"
             if isinstance(dados, list):
                 for item in dados:
                     if isinstance(item, dict) and "result" in item:
@@ -116,7 +114,6 @@ def buscar_dados_roleta_url(roleta_nome):
             
             if numeros:
                 st.sidebar.success(f"✅ {len(numeros)} rodadas recebidas")
-                # Mais novo na PRIMEIRA posição → mantém ordem
                 return numeros
             else:
                 st.sidebar.warning("⚠️ API respondeu, sem números extraídos")
@@ -343,7 +340,7 @@ if modo_operacao == "On-line (Captura Automática)":
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
     
     if novos_dados and novos_dados != st.session_state.historico:
-        num_novo = novos_dados[0]  # ✅ Mais novo na PRIMEIRA posição
+        num_novo = novos_dados[0]
         processar_novo_numero(num_novo)
         st.session_state.historico = novos_dados
 else:
@@ -429,20 +426,20 @@ else:
     st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # ==========================================
-# 6. MÓDULO DE ESTATÍSTICAS E GRÁFICOS
+# 6. ESTATÍSTICAS — SLIDER ATÉ 1000 ✅
 # ==========================================
 if st.session_state.historico:
     st.markdown("---")
-    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 500)")
+    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 1000)")
     
     total_disponivel = len(st.session_state.historico)
-    max_amostra = min(500, total_disponivel)
-    
+    max_amostra = min(1000, total_disponivel)  # ✅ Agora até 1000
+
     qtd_rodadas = st.slider(
         "Selecione o tamanho da amostra (Últimas X rodadas):", 
         min_value=min(10, total_disponivel), 
-        max_value=max(10, max_amostra), 
-        value=max_amostra, 
+        max_value=max_amostra,  # ✅ Slider até 1000
+        value=max_amostra,
         step=5
     )
     
