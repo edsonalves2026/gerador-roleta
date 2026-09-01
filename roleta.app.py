@@ -53,7 +53,6 @@ TABELA_PUXADORES_FIXA = {
     36: [16, 36, 1, 9]
 }
 
-# Lista de User-Agents para evitar bloqueio no Cloud
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
@@ -88,12 +87,11 @@ def buscar_dados_roleta_url(roleta_nome):
             "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
         }
         
-        res = requests.get(endpoint, headers=headers, timeout=12)
+        res = requests.get(endpoint, headers=headers, timeout=10)
         
         if res.status_code == 200:
             dados = res.json()
             numeros = []
-            
             itens = dados if isinstance(dados, list) else dados.get("data", [])
             for item in itens:
                 if isinstance(item, dict) and "result" in item:
@@ -103,8 +101,10 @@ def buscar_dados_roleta_url(roleta_nome):
             
             if numeros:
                 return numeros[::-1]
+        else:
+            st.sidebar.warning(f"Status API: {res.status_code} - Aguardando conexão...")
     except Exception as e:
-        st.sidebar.error(f"Erro ao buscar API: {e}")
+        st.sidebar.error(f"Erro ao conectar na API: {e}")
         
     return st.session_state.get("historico", [])
 
@@ -248,12 +248,13 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
             filtros_ativos_cnt += 1
 
     score_final = min(score, 5)
+    alvos_ordenados = sorted(list(alvos))
     
     status_str = "AGUARDAR"
     if score_final == 3:
         status_str = "PRÉ-ALERTA"
     elif score_final >= 4:
-        status_str = f"SINAL CONFIRMADO: {list(alvos)}"
+        status_str = f"SINAL CONFIRMADO: {alvos_ordenados}"
 
     return {
         "ultimo": ultimo,
@@ -268,7 +269,7 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
         "confirmacoes": "🔴 " * filtros_ativos_cnt,
         "score": f"{score_final}/5",
         "status": status_str,
-        "alvos": list(alvos),
+        "alvos": alvos_ordenados,
         "score_num": score_final
     }
 
@@ -319,7 +320,7 @@ def processar_novo_numero(num_novo):
             st.session_state.tentativa_atual = 0
 
 if modo_operacao == "On-line (Captura Automática)":
-    st.sidebar.info(f"🟢 Conectado em tempo real: **{roleta_selecionada}**")
+    st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
     
     if novos_dados and novos_dados != st.session_state.historico:
@@ -406,6 +407,8 @@ if st.session_state.historico:
                 st.success(msg)
             else:
                 st.error(msg)
+else:
+    st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # ==========================================
 # 6. MÓDULO DE ESTATÍSTICAS E GRÁFICOS (PLOTLY)
