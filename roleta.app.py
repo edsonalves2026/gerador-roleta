@@ -12,7 +12,6 @@ from streamlit_autorefresh import st_autorefresh
 # 1. CONFIGURAÇÃO E CREDENCIAIS SEGURAS
 # ==========================================
 st.set_page_config(page_title="Radar de Roleta Pro - Motor Avançado", layout="wide")
-# Recarrega a cada 5 segundos
 st_autorefresh(interval=5000, key="autoupdate_roleta")
 
 TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
@@ -61,19 +60,19 @@ USER_AGENTS = [
 ]
 
 # ==========================================
-# 2. CONFIGURAÇÃO DAS ROLETAS E ENDPOINTS ✅ CORRIGIDO
+# 2. URLs CORRIGIDAS com UUIDs REAIS ✅
 # ==========================================
 URLS_ROLETAS = {
     "Cassino ao Vivo Immersive Roulette": {
-        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/history?timezone=America%2FSao_Paulo&subject=filter&limit=500"
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-f3703302d5cc/history?timezone=America%2FSao_Paulo&subject=filter&limit=500"
     },
     "Cassino ao Vivo Swedish Roulette": {
-        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/history?timezone=America%2FSao_Paulo&subject=filter&limit=500"
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-40d2-b479-a28a01c6ee13/history?timezone=America%2FSao_Paulo&subject=filter&limit=500"
     }
 }
 
 # ==========================================
-# FUNÇÃO DE BUSCA ✅ CORRIGIDA
+# FUNÇÃO DE BUSCA AJUSTADA ✅
 # ==========================================
 def buscar_dados_roleta_url(roleta_nome):
     config = URLS_ROLETAS.get(roleta_nome, {})
@@ -84,7 +83,7 @@ def buscar_dados_roleta_url(roleta_nome):
         return st.session_state.get("historico", [])
         
     try:
-        # Adiciona parâmetro t=timestamp como o site real faz
+        # Adiciona parâmetro t=timestamp como o site faz
         t_param = f"&t={int(time.time() * 1000)}"
         url_completo = endpoint + t_param
         
@@ -96,7 +95,7 @@ def buscar_dados_roleta_url(roleta_nome):
             "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
         }
         
-        st.sidebar.info(f"🔄 Consultando API...")
+        st.sidebar.info(f"🔄 Consultando: {roleta_nome}")
         res = requests.get(url_completo, headers=headers, timeout=10)
         st.sidebar.text(f"Status HTTP: {res.status_code}")
         
@@ -117,7 +116,7 @@ def buscar_dados_roleta_url(roleta_nome):
             
             if numeros:
                 st.sidebar.success(f"✅ {len(numeros)} rodadas recebidas")
-                # Mantém ordem original (mais novo primeiro)
+                # Mais novo na PRIMEIRA posição → mantém ordem
                 return numeros
             else:
                 st.sidebar.warning("⚠️ API respondeu, sem números extraídos")
@@ -125,7 +124,8 @@ def buscar_dados_roleta_url(roleta_nome):
                     st.code(str(dados[:3]))
         else:
             st.sidebar.error(f"⚠️ Erro HTTP: {res.status_code}")
-            st.sidebar.text(res.text[:300])
+            with st.sidebar.expander("Resposta do erro"):
+                st.code(res.text[:500])
     except Exception as e:
         st.sidebar.error(f"⚠️ Erro: {type(e).__name__}: {e}")
         
@@ -343,7 +343,7 @@ if modo_operacao == "On-line (Captura Automática)":
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
     
     if novos_dados and novos_dados != st.session_state.historico:
-        num_novo = novos_dados[0]  # ✅ Mais novo está na PRIMEIRA posição agora
+        num_novo = novos_dados[0]  # ✅ Mais novo na PRIMEIRA posição
         processar_novo_numero(num_novo)
         st.session_state.historico = novos_dados
 else:
@@ -354,7 +354,7 @@ else:
     if col1.button("Adicionar"):
         num = int(novo_numero)
         processar_novo_numero(num)
-        st.session_state.historico.insert(0, num)  # ✅ Insere no início (mais recente primeiro)
+        st.session_state.historico.insert(0, num)
     if col2.button("Limpar"):
         st.session_state.historico = []
         st.session_state.sinal_ativo = False
@@ -365,7 +365,7 @@ else:
 # Visualização da Esteira
 st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
 if st.session_state.historico:
-    esteira = st.session_state.historico[:14]  # ✅ Pega os 14 mais recentes (início da lista)
+    esteira = st.session_state.historico[:14]
     cols = st.columns(min(len(esteira), 14))
     for i, num in enumerate(esteira):
         with cols[i]:
@@ -383,10 +383,9 @@ if st.session_state.historico:
     st.subheader(f"📊 Mapeamento Analítico - {roleta_selecionada}")
     
     dados_tabela = []
-    janela_exibicao = st.session_state.historico[:14]  # ✅ Mais recentes primeiro
+    janela_exibicao = st.session_state.historico[:14]
     
     for idx, num in enumerate(janela_exibicao):
-        # Reconstroi histórico crescente para análise
         sub_hist = list(reversed(st.session_state.historico[idx:]))
         res = analisar_rodada_especifica(sub_hist)
         
@@ -430,7 +429,7 @@ else:
     st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # ==========================================
-# 6. MÓDULO DE ESTATÍSTICAS E GRÁFICOS (PLOTLY)
+# 6. MÓDULO DE ESTATÍSTICAS E GRÁFICOS
 # ==========================================
 if st.session_state.historico:
     st.markdown("---")
@@ -447,13 +446,11 @@ if st.session_state.historico:
         step=5
     )
     
-    # ✅ Os mais recentes estão no início, então pegamos os primeiros 'qtd_rodadas' e invertemos para análise
     amostra = list(reversed(st.session_state.historico[:qtd_rodadas]))
     total_amostra = len(amostra)
     
     col_g1, col_g2, col_g3 = st.columns(3)
     
-    # Card 1: Quentes & Frios
     with col_g1:
         st.markdown("### 📊 QUENTES/FRIOS")
         contagem = pd.Series(amostra).value_counts()
@@ -468,7 +465,6 @@ if st.session_state.historico:
         fig_freq.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_freq, use_container_width=True)
         
-    # Card 2: Estatística Avançada
     with col_g2:
         st.markdown("### 📊 AVANÇADA")
         
@@ -501,7 +497,6 @@ if st.session_state.historico:
         
         st.caption(f"**Par:** {round((par/total_amostra)*100)}% | **Ímpar:** {round((impar/total_amostra)*100)}% | **1-18:** {round((baixas/total_amostra)*100)}% | **19-36:** {round((altas/total_amostra)*100)}%")
     
-    # Card 3: Mapa de Calor
     with col_g3:
         st.markdown(f"### 📊 ÚLTIMAS {qtd_rodadas}")
         
