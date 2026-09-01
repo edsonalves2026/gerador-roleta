@@ -3,7 +3,6 @@ import pandas as pd
 import requests
 import random
 import time
-import uuid
 import plotly.express as px
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
@@ -18,7 +17,7 @@ TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "")
 
 # ==========================================
-# ⬡ MATRIZ PRINCIPAL — PRESERVADA INTEGRALMENTE ⬡
+# ⬡ MATRIZ PRINCIPAL — TABELA ATUALIZADA ⬡
 # ==========================================
 CILINDRO_EUROPEU = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
@@ -40,20 +39,34 @@ CAMUFLADOS_BASE = {
 
 GRUPO_FANTASMA = {0, 2, 4, 6, 7, 11, 13, 14, 15, 17, 18, 19, 20, 21, 22, 25, 27, 28, 29, 31, 32, 34, 36}
 
+# Base de Dados Oficial dos Ocultos BRK
+TABELA_OCULTOS_BRK = {
+    1: [1, 10, 19, 28, 34],
+    2: [2, 11, 20, 29, 24, 35],
+    3: [3, 12, 21, 30, 36, 14, 25],
+    4: [4, 13, 22, 31, 26, 15],
+    5: [5, 14, 23, 32, 16, 27],
+    6: [6, 15, 24, 33, 17],
+    7: [7, 16, 25, 34, 14, 29],
+    8: [8, 17, 26, 35, 19],
+    9: [9, 18, 27, 36],
+    10: [0, 5, 20, 30, 19, 28]
+}
+
 TABELA_PUXADORES_FIXA = {
-    0: [34, 14, 26, 10], 1: [36, 1, 21, 29], 2: [20, 11, 22, 25],
-    3: [35, 4, 33, 6],   4: [12, 22, 2, 19],  5: [18, 6, 24, 2],
-    6: [12, 20, 5, 27],  7: [16, 14, 28, 4],  8: [11, 35, 28, 4],
-    9: [9, 36, 3, 19],   10: [24, 20, 28, 19],11: [2, 29, 13, 22],
-    12: [32, 21, 3, 30], 13: [31, 11, 33, 15],14: [34, 30, 14, 7],
-    15: [35, 32, 13, 17],16: [36, 33, 19, 7], 17: [22, 25, 16, 8],
-    18: [5, 22, 6, 21],  19: [28, 21, 16, 20],20: [2, 29, 20, 10],
-    21: [12, 19, 18, 30],22: [2, 17, 18, 11], 23: [32, 23, 12, 14],
-    24: [22, 27, 10, 7], 25: [27, 22, 2, 7],  26: [0, 17, 29, 23],
-    27: [25, 24, 13, 22],28: [19, 8, 7, 14],  29: [20, 11, 26, 2],
-    30: [8, 14, 12, 36], 31: [13, 28, 11, 4], 32: [12, 23, 15, 22],
-    33: [36, 13, 1, 3],  34: [0, 14, 34, 7],  35: [15, 12, 8, 9],
-    36: [16, 36, 1, 9]
+    0:  [33, 11, 21, 34], 1:  [20, 22, 32, 12], 2:  [36, 5, 7, 33],
+    3:  [0, 7, 20, 10],   4:  [5, 10, 7, 3],    5:  [3, 6, 9, 27],
+    6:  [7, 4, 17, 27],   7:  [8, 4, 18, 28],   8:  [3, 6, 19, 29],
+    9:  [4, 0, 10, 20],   10: [1, 2, 18, 28],   11: [3, 6, 24, 31],
+    12: [31, 4, 33, 35],  13: [5, 3, 7, 34],    14: [30, 6, 4, 0],
+    15: [21, 7, 8, 19],   16: [20, 8, 6, 7],    17: [11, 7, 9, 28],
+    18: [10, 8, 20, 29],  19: [4, 2, 17, 30],   20: [16, 3, 12, 27],
+    21: [24, 4, 26, 2],   22: [5, 26, 32, 21],  23: [6, 2, 22, 26],
+    24: [5, 7, 21, 29],   25: [8, 4, 13, 24],   26: [9, 5, 29, 17],
+    27: [10, 6, 14, 7],   28: [11, 7, 14, 30],  29: [0, 15, 3, 29],
+    30: [13, 33, 35, 0],  31: [34, 31, 3, 0],   32: [6, 30, 1, 0],
+    33: [7, 32, 1, 14],   34: [5, 2, 31, 33],   35: [6, 9, 3, 0],
+    36: [0, 0, 0, 0]
 }
 
 USER_AGENTS = [
@@ -153,7 +166,7 @@ def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes, tier_nome=""):
         f"🎯 *Alvos Sugeridos:* `{alvos}`\n"
         f"🛡️ *Proteção:* `0 (Zero)`\n\n"
         f"🔍 *Filtros Convergentes:*\n{texto_detalhes}\n\n"
-        f"⚠️ *Entrada recomendada: Até 2 Gales (G1/G2)*"
+        f"⚠️ *Entrada recomendada: Manter aposta por até 3 a 4 rodadas.*"
     )
     return enviar_mensagem_telegram(mensagem)
 
@@ -209,10 +222,65 @@ def checar_estrategia_fantasma(historico):
     return {"status": "INATIVO"}
 
 # ==========================================
-# 4. CLASSIFICADOR DE TIERS (200 RODADAS) + CACHE INTELIGENTE
+# 🆕 NOVO: VALIDAÇÃO POR SEQUÊNCIA BRK
+# ==========================================
+def validar_gatilho_sequencial_brk(historico_200):
+    """
+    Valida se a dezena atual confirma a dezena anterior via soma ou subtração dos dígitos.
+    Prioriza dezenas do grupo que ainda não apareceram no histórico das últimas 200 rodadas.
+    """
+    if not historico_200 or len(historico_200) < 2:
+        return {"sinal_ativo": False, "motivo": "Aguardando mais rodadas."}
+
+    dezena_atual = historico_200[-1]     # Sorteio mais recente
+    dezena_anterior = historico_200[-2]  # Sorteio anterior
+
+    if dezena_atual == 0:
+        soma, diferenca = 10, 10
+    else:
+        d1 = dezena_atual // 10
+        d2 = dezena_atual % 10
+        soma = d1 + d2
+        diferenca = abs(d2 - d1)
+        if soma > 10:
+            soma = (soma // 10) + (soma % 10)
+
+    grupo_confirmado = None
+    if soma == dezena_anterior:
+        grupo_confirmado = soma
+    elif diferenca == dezena_anterior:
+        grupo_confirmado = diferenca
+
+    if grupo_confirmado is None or grupo_confirmado not in TABELA_OCULTOS_BRK:
+        return {
+            "sinal_ativo": False,
+            "motivo": f"Dígitos de {dezena_atual} não confirmam {dezena_anterior}."
+        }
+
+    grupo_completo = TABELA_OCULTOS_BRK[grupo_confirmado]
+    amostra_200 = historico_200[-200:]
+    
+    # Dezenas que NÃO VIERAM nas 200 rodadas
+    dezenas_prioritarias = [num for num in grupo_completo if num not in amostra_200]
+    dezenas_cobertura = [num for num in grupo_completo if num in amostra_200]
+    
+    # Ordena as de cobertura do grupo pelas mais atrasadas
+    dezenas_cobertura.sort(key=lambda x: amostra_200.index(x) if x in amostra_200 else -1)
+
+    return {
+        "sinal_ativo": True,
+        "grupo_confirmado": grupo_confirmado,
+        "dezena_gatilho": dezena_atual,
+        "dezena_confirmada": dezena_anterior,
+        "prioridade_maxima": dezenas_prioritarias,
+        "cobertura": dezenas_cobertura,
+        "grupo_completo": grupo_completo
+    }
+
+# ==========================================
+# 4. CLASSIFICADOR DE TIERS + CACHE
 # ==========================================
 def classificar_padroes_200_rodadas(historico_completo):
-    """Analisa últimas 200 rodadas → ranking de padrões por taxa de acerto."""
     amostra_200 = list(reversed(historico_completo[:200]))
     if len(amostra_200) < 20:
         return {}, pd.DataFrame()
@@ -223,14 +291,14 @@ def classificar_padroes_200_rodadas(historico_completo):
         res = analisar_rodada_especifica(sub_hist)
         
         if res["score_num"] >= 4:
-            futuro = amostra_200[idx:idx+3]  # Direto, G1, G2
+            futuro = amostra_200[idx:idx+3]
             alvos_zero = set(res["alvos"] + [0])
             hit = any(n in alvos_zero for n in futuro)
             
             registros.append({
                 "Padrão": res["padrao_nome"],
                 "Total de Sinais": 1,
-                "Acertou": 1 if hit else 0
+                "Acertos": 1 if hit else 0
             })
     
     if not registros:
@@ -239,7 +307,7 @@ def classificar_padroes_200_rodadas(historico_completo):
     df_reg = pd.DataFrame(registros)
     estudo = df_reg.groupby("Padrão").agg(
         Total=("Total de Sinais", "sum"),
-        Acertos=("Acertou", "sum")
+        Acertos=("Acertos", "sum")
     ).reset_index()
     estudo["Taxa de Acerto (%)"] = round((estudo["Acertos"] / estudo["Total"]) * 100, 1)
     estudo_ordenado = estudo.sort_values(by=["Taxa de Acerto (%)", "Total"], ascending=[False, False]).reset_index(drop=True)
@@ -255,7 +323,6 @@ def classificar_padroes_200_rodadas(historico_completo):
     return tiers, estudo_ordenado
 
 def obter_tiers_cache():
-    """Retorna Tiers do cache — só recalcula quando histórico muda."""
     hist_atual = len(st.session_state.historico)
     if ("tier_cache" not in st.session_state or 
         st.session_state.get("tier_cache_tamanho", -1) != hist_atual):
@@ -267,7 +334,7 @@ def obter_tiers_cache():
     return st.session_state["tier_cache"], st.session_state["df_rank_cache"]
 
 # ==========================================
-# 5. MOTOR DE SCORAGE & PROCESSAMENTO
+# 5. MOTOR DE SCORAGE (ATUALIZADO COM BRK)
 # ==========================================
 def analisar_rodada_especifica(sub_historico, houve_troca=False):
     if not sub_historico:
@@ -277,6 +344,13 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     score = 0
     alvos = set()
     filtros_ativos = []
+
+    # FILTRO BRK: Validação Sequencial Par Anterior + Atual
+    res_brk = validar_gatilho_sequencial_brk(sub_historico)
+    if res_brk["sinal_ativo"]:
+        score += 1
+        filtros_ativos.append(f"OcultosBRK(G{res_brk['grupo_confirmado']})")
+        alvos.update(res_brk["grupo_completo"])
 
     puxadores = obter_puxadores_otimizados(ultimo, sub_historico)
     if puxadores:
@@ -328,7 +402,15 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
             filtros_ativos.append("Racetrack")
 
     score_final = min(score, 5)
-    alvos_ordenados = sorted(list(alvos))
+    
+    # Se houver gatilho BRK ativo, prioriza as dezenas ausentes na ordenação dos alvos
+    if res_brk["sinal_ativo"]:
+        alvos_ausentes = [n for n in res_brk["prioridade_maxima"] if n in alvos]
+        outros_alvos = [n for n in sorted(list(alvos)) if n not in alvos_ausentes]
+        alvos_ordenados = alvos_ausentes + outros_alvos
+    else:
+        alvos_ordenados = sorted(list(alvos))
+
     padrao_nome = " + ".join(filtros_ativos) if filtros_ativos else "Geral"
 
     return {
@@ -346,7 +428,8 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
         "status": "AGUARDAR" if score_final < 4 else f"SINAL: {alvos_ordenados}",
         "alvos": alvos_ordenados,
         "score_num": score_final,
-        "padrao_nome": padrao_nome
+        "padrao_nome": padrao_nome,
+        "dados_brk": res_brk
     }
 
 # ==========================================
@@ -354,7 +437,6 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
 # ==========================================
 st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
-# Inicialização de Estado
 if "historico" not in st.session_state:
     st.session_state.historico = []
 if "sinal_ativo" not in st.session_state:
@@ -395,11 +477,8 @@ modo_gale_opcao = st.sidebar.radio(
 )
 st.sidebar.markdown("---")
 
-# ==========================================
-# PROCESSAMENTO DE NOVO NÚMERO
-# ==========================================
+# Processamento de Novo Número
 def processar_novo_numero(num_novo):
-    # Tratamento de Gale e Verificação de Resultado
     if st.session_state.sinal_ativo:
         st.session_state.tentativa_atual += 1
         etapas = {1: "Entrada Direta", 2: "Gale 1 (G1)", 3: "Gale 2 (G2)"}
@@ -421,16 +500,14 @@ def processar_novo_numero(num_novo):
             st.session_state.alvos_sinal = []
             return
 
-    # Processamento de Nova Entrada
     if len(st.session_state.historico) >= 20:
         historico_analise = list(reversed(st.session_state.historico))
         res_ultimo = analisar_rodada_especifica(historico_analise)
         
         if res_ultimo["score_num"] >= 4:
-            tiers, _ = obter_tiers_cache()  # ← USA CACHE ✅
+            tiers, _ = obter_tiers_cache()
             padrao = res_ultimo["padrao_nome"]
             
-            # Classificar Tier do padrão atual
             tier_do_padrao = "Fora dos Tiers"
             if padrao in tiers.get("ELITE_TOP_3", []):
                 tier_do_padrao = "👑 Elite (Top 3)"
@@ -441,7 +518,6 @@ def processar_novo_numero(num_novo):
             elif padrao in tiers.get("RADAR_TOP_30", []):
                 tier_do_padrao = "🥉 Radar (Top 30)"
 
-            # Verificação de Permissão do Filtro Híbrido
             permitido = False
             if filtro_hibrido_opcao == "Desativado (Usar apenas regras fixas)":
                 permitido = True
@@ -454,11 +530,10 @@ def processar_novo_numero(num_novo):
             elif filtro_hibrido_opcao == "👑 Elite (Top 3 - Máxima Precisão)" and tier_do_padrao == "👑 Elite (Top 3)":
                 permitido = True
 
-            # Lógica de Fusão no Gale
             if st.session_state.sinal_ativo:
                 if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
                     alvos_novos = [n for n in res_ultimo["alvos"] if n not in st.session_state.alvos_sinal]
-                    if alvos_novos and len(st.session_state.alvos_sinal) < 10:  # Limite de segurança ✅
+                    if alvos_novos and len(st.session_state.alvos_sinal) < 10:
                         st.session_state.alvos_sinal.extend(alvos_novos)
                         enviar_mensagem_telegram(
                             f"🔄 *FUSÃO DE ALVOS (GALE)*\n"
@@ -477,9 +552,7 @@ def processar_novo_numero(num_novo):
                     tier_nome=tier_do_padrao
                 )
 
-# ==========================================
-# MODO ONLINE / MANUAL
-# ==========================================
+# Modo Online / Manual
 if modo_operacao == "On-line (Captura Automática)":
     st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
@@ -503,14 +576,11 @@ else:
         st.session_state.alvos_sinal = []
         st.session_state.tentativa_atual = 0
         st.session_state.ultimo_resultado = None
-        # Limpar cache ao reiniciar ✅
         for chave in ["tier_cache", "df_rank_cache", "tier_cache_tamanho"]:
             if chave in st.session_state:
                 del st.session_state[chave]
 
-# ==========================================
-# VISUALIZAÇÃO PRINCIPAL
-# ==========================================
+# Visualização Principal
 st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
 if st.session_state.historico:
     esteira = st.session_state.historico[:14]
@@ -518,6 +588,23 @@ if st.session_state.historico:
     for i, num in enumerate(esteira):
         with cols[i]:
             st.metric(label=f"Pos {i+1:02d}", value=num)
+
+# 🆕 EXIBIÇÃO DO ALERTA EXCLUSIVO BRK NO STREAMLIT
+if st.session_state.historico and len(st.session_state.historico) >= 2:
+    historico_cronologico = list(reversed(st.session_state.historico))
+    res_brk_painel = validar_gatilho_sequencial_brk(historico_cronologico)
+    
+    if res_brk_painel["sinal_ativo"]:
+        st.markdown("---")
+        st.success(f"🎯 **GATILHO OCULTO BRK CONFIRMADO PARA O GRUPO {res_brk_painel['grupo_confirmado']}!**")
+        st.markdown(f"**Validação:** A dezena recente `{res_brk_painel['dezena_gatilho']}` confirmou a dezena anterior `{res_brk_painel['dezena_confirmada']}`.")
+        
+        c_prio, c_cob = st.columns(2)
+        with c_prio:
+            st.error(f"🔥 **PRIORIDADE MÁXIMA (Ainda não saíram nas 200 rodadas):**\n\n`{res_brk_painel['prioridade_maxima']}`")
+        with c_cob:
+            st.warning(f"🛡️ **COBERTURA (Já saíram no histórico):**\n\n`{res_brk_painel['cobertura']}`")
+        st.info("⏱️ **Estratégia Recomendada:** Manter apostas neste grupo pelas próximas **3 a 4 rodadas**.")
 
 if st.session_state.ultimo_resultado:
     if "GREEN" in st.session_state.ultimo_resultado:
@@ -556,7 +643,7 @@ if st.session_state.historico:
     df_exibicao = pd.DataFrame(dados_tabela)
     st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
 
-    # Tabela de Ranking dos Tiers — CACHE ✅
+    # Ranking dos Tiers
     tiers_atuais, df_rank = obter_tiers_cache()
     with st.expander("🏆 Ranking dos Padrões (Últimas 200 Rodadas)", expanded=False):
         if not df_rank.empty:
@@ -564,7 +651,7 @@ if st.session_state.historico:
         else:
             st.info("Aguardando histórico suficiente (mínimo ~20 sinais) para consolidação do ranking.")
 
-    # Disparo de Alerta Manual
+    # Alerta Manual
     historico_analise = list(reversed(st.session_state.historico))
     res_ultimo = analisar_rodada_especifica(historico_analise)
     if res_ultimo["score_num"] >= 4:
@@ -585,7 +672,7 @@ else:
     st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # ==========================================
-# 7. ESTATÍSTICAS — SLIDER ATÉ 1000
+# 7. ESTATÍSTICAS
 # ==========================================
 if st.session_state.historico:
     st.markdown("---")
