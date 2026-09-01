@@ -53,7 +53,7 @@ TABELA_PUXADORES_FIXA = {
 }
 
 # ==========================================
-# 2. CONFIGURAÇÃO DAS ROLETAS E ENDPOINTS (TIPMINER)
+# 2. CONFIGURAÇÃO DAS ROLETAS E ENDPOINTS
 # ==========================================
 URLS_ROLETAS = {
     "Cassino ao Vivo Immersive Roulette": {
@@ -400,7 +400,7 @@ if st.session_state.historico:
                 st.error(msg)
 
 # ==========================================
-# 6. MÓDULO DE ESTATÍSTICAS E GRÁFICOS (0 A 500 RODADAS)
+# 6. MÓDULO DE ESTATÍSTICAS E GRÁFICOS (PLOTLY)
 # ==========================================
 if st.session_state.historico:
     st.markdown("---")
@@ -409,7 +409,6 @@ if st.session_state.historico:
     total_disponivel = len(st.session_state.historico)
     max_amostra = min(500, total_disponivel)
     
-    # Slider individual para controle de escopo (escala de 0 a 500)
     qtd_rodadas = st.slider(
         "Selecione o tamanho da amostra (Últimas X rodadas):", 
         min_value=min(10, total_disponivel), 
@@ -427,7 +426,7 @@ if st.session_state.historico:
     # Card 1: Quentes & Frios
     # ------------------------------------------
     with col_g1:
-        st.markdown("### 📊 Estatísticas: QUENTES/FRIOS")
+        st.markdown("### 📊 QUENTES/FRIOS")
         contagem = pd.Series(amostra).value_counts()
         quentes = contagem.head(5).index.tolist()
         frios = contagem.tail(5).index.tolist()
@@ -435,17 +434,16 @@ if st.session_state.historico:
         st.write(f"🔥 **Mais Frequentes (Quentes):** {quentes}")
         st.write(f"🧊 **Menos Frequentes (Frios):** {frios}")
         
-        # Gráfico de frequência dos números
         freq_df = pd.DataFrame({'Número': contagem.index.astype(str), 'Frequência': contagem.values})
         fig_freq = px.bar(freq_df.head(10), x='Número', y='Frequência', title="Top 10 Números na Amostra", color='Frequência')
         fig_freq.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_freq, use_container_width=True)
         
     # ------------------------------------------
-    # Card 2: Estatística Avançada (Dúzias / Colunas / Externas)
+    # Card 2: Estatística Avançada
     # ------------------------------------------
     with col_g2:
-        st.markdown("### 📊 Estatísticas: AVANÇADA")
+        st.markdown("### 📊 AVANÇADA")
         
         d1 = sum(1 for n in amostra if 1 <= n <= 12)
         d2 = sum(1 for n in amostra if 13 <= n <= 24)
@@ -477,16 +475,15 @@ if st.session_state.historico:
         st.caption(f"**Par:** {round((par/total_amostra)*100)}% | **Ímpar:** {round((impar/total_amostra)*100)}% | **1-18:** {round((baixas/total_amostra)*100)}% | **19-36:** {round((altas/total_amostra)*100)}%")
 
     # ------------------------------------------
-    # Card 3: Mapa de Calor / Matriz da Mesa (Últimas 500)
+    # Card 3: Mapa de Calor
     # ------------------------------------------
     with col_g3:
-        st.markdown(f"### 📊 Estatísticas: ÚLTIMAS {qtd_rodadas}")
+        st.markdown(f"### 📊 ÚLTIMAS {qtd_rodadas}")
         
         matriz_freq = {n: amostra.count(n) for n in range(0, 37)}
         
         st.write("🔥 **Mapa de Calor da Mesa (0 a 36):**")
         
-        # Criação do grid visual idêntico à mesa
         grid_rows = [
             [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
             [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
