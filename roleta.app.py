@@ -12,7 +12,6 @@ from streamlit_autorefresh import st_autorefresh
 # 1. CONFIGURAÇÃO E CREDENCIAIS SEGURAS
 # ==========================================
 st.set_page_config(page_title="Radar de Roleta Pro - Motor Avançado", layout="wide")
-
 # Recarrega a cada 5 segundos
 st_autorefresh(interval=5000, key="autoupdate_roleta")
 
@@ -62,66 +61,73 @@ USER_AGENTS = [
 ]
 
 # ==========================================
-# 2. CONFIGURAÇÃO DAS ROLETAS E ENDPOINTS
+# 2. CONFIGURAÇÃO DAS ROLETAS E ENDPOINTS ✅ CORRIGIDO
 # ==========================================
 URLS_ROLETAS = {
     "Cassino ao Vivo Immersive Roulette": {
-        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4457-4723-a97d-f3703302d5cc/history?timezone=America%2FSao_Paulo&subject=filter&limit=100"
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/history?timezone=America%2FSao_Paulo&subject=filter&limit=500"
     },
     "Cassino ao Vivo Swedish Roulette": {
-        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-10d2-b479-a28a01c6ee13/history?timezone=America%2FSao_Paulo&subject=filter&limit=100"
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/history?timezone=America%2FSao_Paulo&subject=filter&limit=500"
     }
 }
 
+# ==========================================
+# FUNÇÃO DE BUSCA ✅ CORRIGIDA
+# ==========================================
 def buscar_dados_roleta_url(roleta_nome):
     config = URLS_ROLETAS.get(roleta_nome, {})
     endpoint = config.get("api_endpoint", "")
     
     if not endpoint:
+        st.sidebar.warning("⚠️ Nenhum endpoint configurado.")
         return st.session_state.get("historico", [])
         
     try:
-        cb_token = f"{int(time.time() * 1000)}"
-        url_limpa = endpoint.split("&_cb=")[0]
-        url_com_cb = f"{url_limpa}&_cb={cb_token}"
+        # Adiciona parâmetro t=timestamp como o site real faz
+        t_param = f"&t={int(time.time() * 1000)}"
+        url_completo = endpoint + t_param
         
         headers = {
             "User-Agent": random.choice(USER_AGENTS),
             "Accept": "application/json, text/plain, */*",
             "Origin": "https://www.tipminer.com",
-            "Referer": "https://www.tipminer.com/"
+            "Referer": "https://www.tipminer.com/",
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
         }
         
-        res = requests.get(url_com_cb, headers=headers, timeout=8)
+        st.sidebar.info(f"🔄 Consultando API...")
+        res = requests.get(url_completo, headers=headers, timeout=10)
+        st.sidebar.text(f"Status HTTP: {res.status_code}")
         
         if res.status_code == 200:
             dados = res.json()
             numeros = []
             
-            # Tratamento flexível para estruturas JSON variadas
+            # ✅ ESTRUTURA REAL: lista direta, campo "result"
             if isinstance(dados, list):
-                itens = dados
-            elif isinstance(dados, dict):
-                itens = dados.get("data", dados.get("results", []))
-            else:
-                itens = []
-            
-            for item in itens:
-                if isinstance(item, dict):
-                    val = item.get("result", item.get("number"))
-                    if val is not None and str(val).strip().isdigit():
-                        numeros.append(int(val))
-                elif isinstance(item, (int, str)) and str(item).strip().isdigit():
-                    numeros.append(int(item))
+                for item in dados:
+                    if isinstance(item, dict) and "result" in item:
+                        val = item["result"]
+                        if val is not None:
+                            try:
+                                numeros.append(int(val))
+                            except (ValueError, TypeError):
+                                pass
             
             if numeros:
-                return numeros[::-1]
+                st.sidebar.success(f"✅ {len(numeros)} rodadas recebidas")
+                # Mantém ordem original (mais novo primeiro)
+                return numeros
             else:
-                st.sidebar.warning("⚠️ Lista vazia retornada pela API.")
+                st.sidebar.warning("⚠️ API respondeu, sem números extraídos")
+                with st.sidebar.expander("Ver resposta API"):
+                    st.code(str(dados[:3]))
         else:
-            st.sidebar.error(f"⚠️ Status API: {res.status_code}")
+            st.sidebar.error(f"⚠️ Erro HTTP: {res.status_code}")
+            st.sidebar.text(res.text[:300])
     except Exception as e:
-        st.sidebar.error(f"⚠️ Erro na captura: {e}")
+        st.sidebar.error(f"⚠️ Erro: {type(e).__name__}: {e}")
         
     return st.session_state.get("historico", [])
 
@@ -297,7 +303,6 @@ st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
 if "historico" not in st.session_state:
     st.session_state.historico = []
-
 if "sinal_ativo" not in st.session_state:
     st.session_state.sinal_ativo = False
     st.session_state.alvos_sinal = []
@@ -305,17 +310,14 @@ if "sinal_ativo" not in st.session_state:
     st.session_state.ultimo_resultado = None
 
 st.sidebar.header("🕹️ Painel de Operação")
-
 modo_operacao = st.sidebar.selectbox(
     "🌐 Modo de Operação:",
     ["On-line (Captura Automática)", "Off-line (Digitação Manual)"]
 )
-
 roleta_selecionada = st.sidebar.selectbox(
     "🎰 Selecionar Roleta:",
     list(URLS_ROLETAS.keys())
 )
-
 st.sidebar.markdown("---")
 
 def processar_novo_numero(num_novo):
@@ -341,10 +343,9 @@ if modo_operacao == "On-line (Captura Automática)":
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
     
     if novos_dados and novos_dados != st.session_state.historico:
-        num_novo = novos_dados[-1]
+        num_novo = novos_dados[0]  # ✅ Mais novo está na PRIMEIRA posição agora
         processar_novo_numero(num_novo)
         st.session_state.historico = novos_dados
-
 else:
     st.sidebar.warning(f"🟠 Modo Manual ativo: **{roleta_selecionada}**")
     novo_numero = st.sidebar.number_input("Número Sorteado (Manual):", min_value=0, max_value=36, step=1)
@@ -353,8 +354,7 @@ else:
     if col1.button("Adicionar"):
         num = int(novo_numero)
         processar_novo_numero(num)
-        st.session_state.historico.append(num)
-
+        st.session_state.historico.insert(0, num)  # ✅ Insere no início (mais recente primeiro)
     if col2.button("Limpar"):
         st.session_state.historico = []
         st.session_state.sinal_ativo = False
@@ -365,7 +365,7 @@ else:
 # Visualização da Esteira
 st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
 if st.session_state.historico:
-    esteira = st.session_state.historico[-14:]
+    esteira = st.session_state.historico[:14]  # ✅ Pega os 14 mais recentes (início da lista)
     cols = st.columns(min(len(esteira), 14))
     for i, num in enumerate(esteira):
         with cols[i]:
@@ -383,10 +383,11 @@ if st.session_state.historico:
     st.subheader(f"📊 Mapeamento Analítico - {roleta_selecionada}")
     
     dados_tabela = []
-    janela_exibicao = st.session_state.historico[-14:]
+    janela_exibicao = st.session_state.historico[:14]  # ✅ Mais recentes primeiro
     
     for idx, num in enumerate(janela_exibicao):
-        sub_hist = st.session_state.historico[:len(st.session_state.historico) - len(janela_exibicao) + idx + 1]
+        # Reconstroi histórico crescente para análise
+        sub_hist = list(reversed(st.session_state.historico[idx:]))
         res = analisar_rodada_especifica(sub_hist)
         
         dados_tabela.append({
@@ -409,7 +410,8 @@ if st.session_state.historico:
     st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
 
     # Disparo de Alerta
-    res_ultimo = analisar_rodada_especifica(st.session_state.historico)
+    historico_analise = list(reversed(st.session_state.historico))
+    res_ultimo = analisar_rodada_especifica(historico_analise)
     if res_ultimo["score_num"] >= 4:
         st.error(f"🚨 SINAL CONFIRMADO: {res_ultimo['alvos']}")
         if not st.session_state.sinal_ativo and st.session_state.alvos_sinal != res_ultimo["alvos"]:
@@ -445,7 +447,8 @@ if st.session_state.historico:
         step=5
     )
     
-    amostra = st.session_state.historico[-qtd_rodadas:]
+    # ✅ Os mais recentes estão no início, então pegamos os primeiros 'qtd_rodadas' e invertemos para análise
+    amostra = list(reversed(st.session_state.historico[:qtd_rodadas]))
     total_amostra = len(amostra)
     
     col_g1, col_g2, col_g3 = st.columns(3)
@@ -497,7 +500,7 @@ if st.session_state.historico:
         st.plotly_chart(fig_adv, use_container_width=True)
         
         st.caption(f"**Par:** {round((par/total_amostra)*100)}% | **Ímpar:** {round((impar/total_amostra)*100)}% | **1-18:** {round((baixas/total_amostra)*100)}% | **19-36:** {round((altas/total_amostra)*100)}%")
-
+    
     # Card 3: Mapa de Calor
     with col_g3:
         st.markdown(f"### 📊 ÚLTIMAS {qtd_rodadas}")
