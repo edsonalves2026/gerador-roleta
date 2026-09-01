@@ -17,6 +17,9 @@ st_autorefresh(interval=5000, key="autoupdate_roleta")
 TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "")
 
+# ==========================================
+# ⬡ MATRIZ PRINCIPAL — PRESERVADA INTEGRALMENTE ⬡
+# ==========================================
 CILINDRO_EUROPEU = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
     5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
@@ -206,44 +209,42 @@ def checar_estrategia_fantasma(historico):
     return {"status": "INATIVO"}
 
 # ==========================================
-# 4. CLASSIFICADOR DE TIERS (200 RODADAS)
+# 4. CLASSIFICADOR DE TIERS (200 RODADAS) + CACHE INTELIGENTE
 # ==========================================
 def classificar_padroes_200_rodadas(historico_completo):
-    """
-    Analisa a janela das últimas 200 rodadas para gerar o ranking de assertividade.
-    """
+    """Analisa últimas 200 rodadas → ranking de padrões por taxa de acerto."""
     amostra_200 = list(reversed(historico_completo[:200]))
     if len(amostra_200) < 20:
         return {}, pd.DataFrame()
-
+    
     registros = []
     for idx in range(10, len(amostra_200) - 2):
         sub_hist = amostra_200[:idx]
         res = analisar_rodada_especifica(sub_hist)
         
         if res["score_num"] >= 4:
-            futuro = amostra_200[idx:idx+3] # Direto, G1, G2
+            futuro = amostra_200[idx:idx+3]  # Direto, G1, G2
             alvos_zero = set(res["alvos"] + [0])
             hit = any(n in alvos_zero for n in futuro)
             
             registros.append({
-                "Padrao": res["padrao_nome"],
-                "Resultado": "GREEN" if hit else "RED"
+                "Padrão": res["padrao_nome"],
+                "Total de Sinais": 1,
+                "Acertou": 1 if hit else 0
             })
-
+    
     if not registros:
         return {}, pd.DataFrame()
-
+    
     df_reg = pd.DataFrame(registros)
-    estudo = df_reg.groupby("Padrao").agg(
-        Total=("Resultado", "count"),
-        Greens=("Resultado", lambda x: (x == "GREEN").sum())
+    estudo = df_reg.groupby("Padrão").agg(
+        Total=("Total de Sinais", "sum"),
+        Acertos=("Acertou", "sum")
     ).reset_index()
-
-    estudo["WinRate"] = (estudo["Greens"] / estudo["Total"]) * 100
-    estudo_ordenado = estudo.sort_values(by=["WinRate", "Total"], ascending=[False, False])
-    lista_ordenada = estudo_ordenado["Padrao"].tolist()
-
+    estudo["Taxa de Acerto (%)"] = round((estudo["Acertos"] / estudo["Total"]) * 100, 1)
+    estudo_ordenado = estudo.sort_values(by=["Taxa de Acerto (%)", "Total"], ascending=[False, False]).reset_index(drop=True)
+    
+    lista_ordenada = estudo_ordenado["Padrão"].tolist()
     tiers = {
         "ELITE_TOP_3": lista_ordenada[:3],
         "SELECAO_OURO_TOP_5": lista_ordenada[:5],
@@ -252,6 +253,18 @@ def classificar_padroes_200_rodadas(historico_completo):
     }
     
     return tiers, estudo_ordenado
+
+def obter_tiers_cache():
+    """Retorna Tiers do cache — só recalcula quando histórico muda."""
+    hist_atual = len(st.session_state.historico)
+    if ("tier_cache" not in st.session_state or 
+        st.session_state.get("tier_cache_tamanho", -1) != hist_atual):
+        
+        st.session_state["tier_cache"], st.session_state["df_rank_cache"] = \
+            classificar_padroes_200_rodadas(st.session_state.historico)
+        st.session_state["tier_cache_tamanho"] = hist_atual
+    
+    return st.session_state["tier_cache"], st.session_state["df_rank_cache"]
 
 # ==========================================
 # 5. MOTOR DE SCORAGE & PROCESSAMENTO
@@ -341,6 +354,7 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
 # ==========================================
 st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
+# Inicialização de Estado
 if "historico" not in st.session_state:
     st.session_state.historico = []
 if "sinal_ativo" not in st.session_state:
@@ -349,7 +363,7 @@ if "sinal_ativo" not in st.session_state:
     st.session_state.tentativa_atual = 0
     st.session_state.ultimo_resultado = None
 
-# Painel Lateral de Configurações
+# Painel Lateral
 st.sidebar.header("🕹️ Painel de Operação")
 modo_operacao = st.sidebar.selectbox(
     "🌐 Modo de Operação:",
@@ -359,10 +373,9 @@ roleta_selecionada = st.sidebar.selectbox(
     "🎰 Selecionar Roleta:",
     list(URLS_ROLETAS.keys())
 )
-
 st.sidebar.markdown("---")
-st.sidebar.subheader("🎛️ Filtro Híbrido de Assertividade (200 Rodadas)")
 
+st.sidebar.subheader("🎛️ Filtro Híbrido de Assertividade (200 Rodadas)")
 filtro_hibrido_opcao = st.sidebar.selectbox(
     "Nível de Filtragem dos Sinais:",
     [
@@ -380,9 +393,11 @@ modo_gale_opcao = st.sidebar.radio(
     ["Opção A: Mantém Sinal A (Aposta Fixa)", "Opção B: Fusão de Alvos Únicos (A + B)"],
     index=1
 )
-
 st.sidebar.markdown("---")
 
+# ==========================================
+# PROCESSAMENTO DE NOVO NÚMERO
+# ==========================================
 def processar_novo_numero(num_novo):
     # Tratamento de Gale e Verificação de Resultado
     if st.session_state.sinal_ativo:
@@ -411,11 +426,11 @@ def processar_novo_numero(num_novo):
         historico_analise = list(reversed(st.session_state.historico))
         res_ultimo = analisar_rodada_especifica(historico_analise)
         
-        # Filtro estático mínimo
         if res_ultimo["score_num"] >= 4:
-            tiers, df_rank = classificar_padroes_200_rodadas(st.session_state.historico)
+            tiers, _ = obter_tiers_cache()  # ← USA CACHE ✅
             padrao = res_ultimo["padrao_nome"]
             
+            # Classificar Tier do padrão atual
             tier_do_padrao = "Fora dos Tiers"
             if padrao in tiers.get("ELITE_TOP_3", []):
                 tier_do_padrao = "👑 Elite (Top 3)"
@@ -430,7 +445,7 @@ def processar_novo_numero(num_novo):
             permitido = False
             if filtro_hibrido_opcao == "Desativado (Usar apenas regras fixas)":
                 permitido = True
-            elif filtro_hibrido_opcao == "🥉 Radar (Top 30 - Permissivo)" and tier_do_padrao in ["👑 Elite (Top 3)", "🥇 Seleção Ouro (Top 5)", "🥈 Seleção (Top 10)", "🥉 Radar (Top 30)"]:
+            elif filtro_hibrido_opcao == "🥉 Radar (Top 30 - Permissivo)" and tier_do_padrao != "Fora dos Tiers":
                 permitido = True
             elif filtro_hibrido_opcao == "🥈 Seleção (Top 10 - Equilibrado)" and tier_do_padrao in ["👑 Elite (Top 3)", "🥇 Seleção Ouro (Top 5)", "🥈 Seleção (Top 10)"]:
                 permitido = True
@@ -439,25 +454,32 @@ def processar_novo_numero(num_novo):
             elif filtro_hibrido_opcao == "👑 Elite (Top 3 - Máxima Precisão)" and tier_do_padrao == "👑 Elite (Top 3)":
                 permitido = True
 
-            # Lógica de Fusão no Gale se já houver sinal ativo
+            # Lógica de Fusão no Gale
             if st.session_state.sinal_ativo:
                 if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
                     alvos_novos = [n for n in res_ultimo["alvos"] if n not in st.session_state.alvos_sinal]
-                    if alvos_novos:
+                    if alvos_novos and len(st.session_state.alvos_sinal) < 10:  # Limite de segurança ✅
                         st.session_state.alvos_sinal.extend(alvos_novos)
-                        enviar_mensagem_telegram(f"🔄 *FUSÃO DE ALVOS (GALE)*\nNovos alvos adicionados: `{alvos_novos}`\nAlvos Totais: `{st.session_state.alvos_sinal}`")
+                        enviar_mensagem_telegram(
+                            f"🔄 *FUSÃO DE ALVOS (GALE)*\n"
+                            f"Novos alvos adicionados: `{alvos_novos}`\n"
+                            f"Alvos Totais: `{st.session_state.alvos_sinal}`"
+                        )
             elif permitido:
                 st.session_state.sinal_ativo = True
                 st.session_state.alvos_sinal = res_ultimo["alvos"]
                 st.session_state.tentativa_atual = 0
                 enviar_alerta_telegram(
-                    res_ultimo["ultimo"], 
-                    res_ultimo["score_num"], 
-                    res_ultimo["alvos"], 
+                    res_ultimo["ultimo"],
+                    res_ultimo["score_num"],
+                    res_ultimo["alvos"],
                     [f"Padrão: {padrao}", f"Filtro: {filtro_hibrido_opcao}"],
                     tier_nome=tier_do_padrao
                 )
 
+# ==========================================
+# MODO ONLINE / MANUAL
+# ==========================================
 if modo_operacao == "On-line (Captura Automática)":
     st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
@@ -481,8 +503,14 @@ else:
         st.session_state.alvos_sinal = []
         st.session_state.tentativa_atual = 0
         st.session_state.ultimo_resultado = None
+        # Limpar cache ao reiniciar ✅
+        for chave in ["tier_cache", "df_rank_cache", "tier_cache_tamanho"]:
+            if chave in st.session_state:
+                del st.session_state[chave]
 
-# Visualização da Esteira
+# ==========================================
+# VISUALIZAÇÃO PRINCIPAL
+# ==========================================
 st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
 if st.session_state.historico:
     esteira = st.session_state.historico[:14]
@@ -528,15 +556,15 @@ if st.session_state.historico:
     df_exibicao = pd.DataFrame(dados_tabela)
     st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
 
-    # Tabela do Ranking das 200 Rodadas
-    tiers_atuais, df_rank = classificar_padroes_200_rodadas(st.session_state.historico)
+    # Tabela de Ranking dos Tiers — CACHE ✅
+    tiers_atuais, df_rank = obter_tiers_cache()
     with st.expander("🏆 Ranking dos Padrões (Últimas 200 Rodadas)", expanded=False):
         if not df_rank.empty:
             st.dataframe(df_rank, use_container_width=True, hide_index=True)
         else:
-            st.write("Aguardando histórico suficiente para consolidação do ranking.")
+            st.info("Aguardando histórico suficiente (mínimo ~20 sinais) para consolidação do ranking.")
 
-    # Disparo de Alerta Manual / Status
+    # Disparo de Alerta Manual
     historico_analise = list(reversed(st.session_state.historico))
     res_ultimo = analisar_rodada_especifica(historico_analise)
     if res_ultimo["score_num"] >= 4:
@@ -544,9 +572,9 @@ if st.session_state.historico:
             
         if st.button("📤 Reenviar Alerta para Telegram"):
             sucesso, msg = enviar_alerta_telegram(
-                res_ultimo["ultimo"], 
-                res_ultimo["score_num"], 
-                res_ultimo["alvos"], 
+                res_ultimo["ultimo"],
+                res_ultimo["score_num"],
+                res_ultimo["alvos"],
                 [res_ultimo["status"]]
             )
             if sucesso:
@@ -565,10 +593,9 @@ if st.session_state.historico:
     
     total_disponivel = len(st.session_state.historico)
     max_amostra = min(1000, total_disponivel)
-
     qtd_rodadas = st.slider(
-        "Selecione o tamanho da amostra (Últimas X rodadas):", 
-        min_value=min(10, total_disponivel), 
+        "Selecione o tamanho da amostra (Últimas X rodadas):",
+        min_value=min(10, total_disponivel),
         max_value=max_amostra,
         value=max_amostra,
         step=5
@@ -620,7 +647,7 @@ if st.session_state.historico:
         
         fig_adv = px.bar(df_duzias, x='Grupo', y='Porcentagem', text='Porcentagem', title="Distribuição Dúzias e Colunas (%)")
         fig_adv.update_traces(texttemplate='%{text}%', textposition='outside')
-        fig_adv.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=10))
+        fig_adv.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=5))
         st.plotly_chart(fig_adv, use_container_width=True)
         
         st.caption(f"**Par:** {round((par/total_amostra)*100)}% | **Ímpar:** {round((impar/total_amostra)*100)}% | **1-18:** {round((baixas/total_amostra)*100)}% | **19-36:** {round((altas/total_amostra)*100)}%")
