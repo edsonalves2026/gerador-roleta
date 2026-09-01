@@ -39,7 +39,6 @@ CAMUFLADOS_BASE = {
 
 GRUPO_FANTASMA = {0, 2, 4, 6, 7, 11, 13, 14, 15, 17, 18, 19, 20, 21, 22, 25, 27, 28, 29, 31, 32, 34, 36}
 
-# Base de Dados Oficial dos Ocultos BRK
 TABELA_OCULTOS_BRK = {
     1: [1, 10, 19, 28, 34],
     2: [2, 11, 20, 29, 24, 35],
@@ -221,19 +220,12 @@ def checar_estrategia_fantasma(historico):
         return {"status": "ATIVADO", "principais": [9, 19, 27]}
     return {"status": "INATIVO"}
 
-# ==========================================
-# 🆕 NOVO: VALIDAÇÃO POR SEQUÊNCIA BRK
-# ==========================================
 def validar_gatilho_sequencial_brk(historico_200):
-    """
-    Valida se a dezena atual confirma a dezena anterior via soma ou subtração dos dígitos.
-    Prioriza dezenas do grupo que ainda não apareceram no histórico das últimas 200 rodadas.
-    """
     if not historico_200 or len(historico_200) < 2:
         return {"sinal_ativo": False, "motivo": "Aguardando mais rodadas."}
 
-    dezena_atual = historico_200[-1]     # Sorteio mais recente
-    dezena_anterior = historico_200[-2]  # Sorteio anterior
+    dezena_atual = historico_200[-1]
+    dezena_anterior = historico_200[-2]
 
     if dezena_atual == 0:
         soma, diferenca = 10, 10
@@ -260,11 +252,8 @@ def validar_gatilho_sequencial_brk(historico_200):
     grupo_completo = TABELA_OCULTOS_BRK[grupo_confirmado]
     amostra_200 = historico_200[-200:]
     
-    # Dezenas que NÃO VIERAM nas 200 rodadas
     dezenas_prioritarias = [num for num in grupo_completo if num not in amostra_200]
     dezenas_cobertura = [num for num in grupo_completo if num in amostra_200]
-    
-    # Ordena as de cobertura do grupo pelas mais atrasadas
     dezenas_cobertura.sort(key=lambda x: amostra_200.index(x) if x in amostra_200 else -1)
 
     return {
@@ -345,7 +334,6 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     alvos = set()
     filtros_ativos = []
 
-    # FILTRO BRK: Validação Sequencial Par Anterior + Atual
     res_brk = validar_gatilho_sequencial_brk(sub_historico)
     if res_brk["sinal_ativo"]:
         score += 1
@@ -403,7 +391,6 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
 
     score_final = min(score, 5)
     
-    # Se houver gatilho BRK ativo, prioriza as dezenas ausentes na ordenação dos alvos
     if res_brk["sinal_ativo"]:
         alvos_ausentes = [n for n in res_brk["prioridade_maxima"] if n in alvos]
         outros_alvos = [n for n in sorted(list(alvos)) if n not in alvos_ausentes]
@@ -477,7 +464,6 @@ modo_gale_opcao = st.sidebar.radio(
 )
 st.sidebar.markdown("---")
 
-# Processamento de Novo Número
 def processar_novo_numero(num_novo):
     if st.session_state.sinal_ativo:
         st.session_state.tentativa_atual += 1
@@ -563,14 +549,28 @@ if modo_operacao == "On-line (Captura Automática)":
         st.session_state.historico = novos_dados
 else:
     st.sidebar.warning(f"🟠 Modo Manual ativo: **{roleta_selecionada}**")
-    novo_numero = st.sidebar.number_input("Número Sorteado (Manual):", min_value=0, max_value=36, step=1)
     
-    col1, col2 = st.sidebar.columns(2)
-    if col1.button("Adicionar"):
-        num = int(novo_numero)
-        processar_novo_numero(num)
-        st.session_state.historico.insert(0, num)
-    if col2.button("Limpar"):
+    # ==========================================
+    # ⚡ FORMULÁRIO COM CONFIRMAÇÃO AUTOMÁTICA (ENTER)
+    # ==========================================
+    with st.sidebar.form(key="form_entrada_manual", clear_on_submit=True):
+        novo_numero_input = st.number_input(
+            "Número Sorteado (Manual):", 
+            min_value=0, 
+            max_value=36, 
+            step=1,
+            value=None,
+            placeholder="Digite de 0 a 36 e tecle Enter"
+        )
+        submetido = st.form_submit_button("➕ Adicionar Número (Enter)")
+        
+        if submetido and novo_numero_input is not None:
+            num = int(novo_numero_input)
+            processar_novo_numero(num)
+            st.session_state.historico.insert(0, num)
+            st.rerun()
+
+    if st.sidebar.button("🧹 Limpar Histórico"):
         st.session_state.historico = []
         st.session_state.sinal_ativo = False
         st.session_state.alvos_sinal = []
@@ -579,6 +579,7 @@ else:
         for chave in ["tier_cache", "df_rank_cache", "tier_cache_tamanho"]:
             if chave in st.session_state:
                 del st.session_state[chave]
+        st.rerun()
 
 # Visualização Principal
 st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
@@ -589,7 +590,7 @@ if st.session_state.historico:
         with cols[i]:
             st.metric(label=f"Pos {i+1:02d}", value=num)
 
-# 🆕 EXIBIÇÃO DO ALERTA EXCLUSIVO BRK NO STREAMLIT
+# EXIBIÇÃO DO ALERTA EXCLUSIVO BRK NO STREAMLIT
 if st.session_state.historico and len(st.session_state.historico) >= 2:
     historico_cronologico = list(reversed(st.session_state.historico))
     res_brk_painel = validar_gatilho_sequencial_brk(historico_cronologico)
