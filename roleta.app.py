@@ -95,7 +95,7 @@ def buscar_dados_roleta_url(roleta_nome):
         }
         
         st.sidebar.info(f"🔄 Consultando: {roleta_nome}")
-        res = requests.get(url_completo, headers=headers, timeout=15)  # Timeout aumentado
+        res = requests.get(url_completo, headers=headers, timeout=15)
         st.sidebar.text(f"Status HTTP: {res.status_code}")
         
         if res.status_code == 200:
@@ -433,12 +433,12 @@ if st.session_state.historico:
     st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 1000)")
     
     total_disponivel = len(st.session_state.historico)
-    max_amostra = min(1000, total_disponivel)  # ✅ Agora até 1000
+    max_amostra = min(1000, total_disponivel)
 
     qtd_rodadas = st.slider(
         "Selecione o tamanho da amostra (Últimas X rodadas):", 
         min_value=min(10, total_disponivel), 
-        max_value=max_amostra,  # ✅ Slider até 1000
+        max_value=max_amostra,
         value=max_amostra,
         step=5
     )
