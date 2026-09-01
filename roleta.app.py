@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import requests
 import random
+import time
+import uuid
 import plotly.express as px
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
@@ -54,9 +56,9 @@ TABELA_PUXADORES_FIXA = {
 }
 
 USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 ]
 
 # ==========================================
@@ -64,10 +66,10 @@ USER_AGENTS = [
 # ==========================================
 URLS_ROLETAS = {
     "Cassino ao Vivo Immersive Roulette": {
-        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4457-4723-a97d-f3703302d5cc/history?limit=500&timezone=America%2FSao_Paulo"
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4457-4723-a97d-f3703302d5cc/history?timezone=America%2FSao_Paulo&subject=filter&limit=200"
     },
     "Cassino ao Vivo Swedish Roulette": {
-        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-10d2-b479-a28a01c6ee13/history?limit=500&timezone=America%2FSao_Paulo"
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-10d2-b479-a28a01c6ee13/history?timezone=America%2FSao_Paulo&subject=filter&limit=200"
     }
 }
 
@@ -79,32 +81,46 @@ def buscar_dados_roleta_url(roleta_nome):
         return st.session_state.get("historico", [])
         
     try:
+        # Token anti-cache dinâmico exigido pela API
+        cb_token = f"{int(time.time() * 1000)}-{str(uuid.uuid4())[:18]}"
+        url_base = endpoint.split("&_cb=")[0]
+        url_com_cb = f"{url_base}&_cb={cb_token}"
+        
         headers = {
             "User-Agent": random.choice(USER_AGENTS),
             "Accept": "application/json, text/plain, */*",
-            "Origin": "https://tipminer.com",
-            "Referer": "https://tipminer.com/",
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Origin": "https://www.tipminer.com",
+            "Referer": "https://www.tipminer.com/",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-site"
         }
         
-        res = requests.get(endpoint, headers=headers, timeout=10)
+        res = requests.get(url_com_cb, headers=headers, timeout=8)
         
         if res.status_code == 200:
             dados = res.json()
             numeros = []
+            
+            # Trata respostas do tipo Array direto ou Objeto com chave 'data'
             itens = dados if isinstance(dados, list) else dados.get("data", [])
+            
             for item in itens:
                 if isinstance(item, dict) and "result" in item:
-                    val = str(item.get("result", "")).strip()
-                    if val.isdigit():
+                    val = item.get("result")
+                    if val is not None and str(val).strip().isdigit():
                         numeros.append(int(val))
             
             if numeros:
+                # Inverte a lista para manter a ordem cronológica (Antigo -> Recente)
                 return numeros[::-1]
+            else:
+                st.sidebar.warning("⚠️ Conectado, aguardando novos dados...")
         else:
-            st.sidebar.warning(f"Status API: {res.status_code} - Aguardando conexão...")
+            st.sidebar.error(f"⚠️ Status API: {res.status_code}")
     except Exception as e:
-        st.sidebar.error(f"Erro ao conectar na API: {e}")
+        st.sidebar.error(f"⚠️ Erro ao conectar na API: {e}")
         
     return st.session_state.get("historico", [])
 
@@ -305,212 +321,4 @@ def processar_novo_numero(num_novo):
     if st.session_state.sinal_ativo:
         st.session_state.tentativa_atual += 1
         etapas = {1: "Entrada Direta", 2: "Gale 1 (G1)", 3: "Gale 2 (G2)"}
-        etapa_nome = etapas.get(st.session_state.tentativa_atual, f"Gale {st.session_state.tentativa_atual-1}")
-        
-        alvos_com_zero = set(st.session_state.alvos_sinal + [0])
-        if num_novo in alvos_com_zero:
-            st.session_state.ultimo_resultado = f"GREEN ✅ ({etapa_nome})"
-            enviar_resultado_telegram("GREEN", num_novo, etapa_nome)
-            st.session_state.sinal_ativo = False
-            st.session_state.tentativa_atual = 0
-        elif st.session_state.tentativa_atual >= 3:
-            st.session_state.ultimo_resultado = "LOSS / RED ❌"
-            enviar_resultado_telegram("LOSS", num_novo)
-            st.session_state.sinal_ativo = False
-            st.session_state.tentativa_atual = 0
-
-if modo_operacao == "On-line (Captura Automática)":
-    st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
-    novos_dados = buscar_dados_roleta_url(roleta_selecionada)
-    
-    if novos_dados and novos_dados != st.session_state.historico:
-        num_novo = novos_dados[-1]
-        processar_novo_numero(num_novo)
-        st.session_state.historico = novos_dados
-
-else:
-    st.sidebar.warning(f"🟠 Modo Manual ativo: **{roleta_selecionada}**")
-    novo_numero = st.sidebar.number_input("Número Sorteado (Manual):", min_value=0, max_value=36, step=1)
-    
-    col1, col2 = st.sidebar.columns(2)
-    if col1.button("Adicionar"):
-        num = int(novo_numero)
-        processar_novo_numero(num)
-        st.session_state.historico.append(num)
-
-    if col2.button("Limpar"):
-        st.session_state.historico = []
-        st.session_state.sinal_ativo = False
-        st.session_state.alvos_sinal = []
-        st.session_state.tentativa_atual = 0
-        st.session_state.ultimo_resultado = None
-
-# Visualização da Esteira
-st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
-if st.session_state.historico:
-    esteira = st.session_state.historico[-14:]
-    cols = st.columns(min(len(esteira), 14))
-    for i, num in enumerate(esteira):
-        with cols[i]:
-            st.metric(label=f"Pos {i+1:02d}", value=num)
-
-if st.session_state.ultimo_resultado:
-    if "GREEN" in st.session_state.ultimo_resultado:
-        st.success(f"🎉 Resultado do Último Sinal: **{st.session_state.ultimo_resultado}**")
-    else:
-        st.error(f"⚠️ Resultado do Último Sinal: **{st.session_state.ultimo_resultado}**")
-
-# Tabela Analítica
-if st.session_state.historico:
-    st.markdown("---")
-    st.subheader(f"📊 Mapeamento Analítico - {roleta_selecionada}")
-    
-    dados_tabela = []
-    janela_exibicao = st.session_state.historico[-14:]
-    
-    for idx, num in enumerate(janela_exibicao):
-        sub_hist = st.session_state.historico[:len(st.session_state.historico) - len(janela_exibicao) + idx + 1]
-        res = analisar_rodada_especifica(sub_hist)
-        
-        dados_tabela.append({
-            "Posição": f"Pos {idx+1:02d}",
-            "Último": res["ultimo"],
-            "Esquerda": res["esquerda"],
-            "Direita": res["direita"],
-            "Puxadores Híbridos": res["puxadores"],
-            "Vizinhos Físicos": res["vizinhos_str"],
-            "Camuflados": res["camuflados"],
-            "Racetrack": res["racetrack"],
-            "Inversão": res["inversao"],
-            "Reincidência": res["reincidencia"],
-            "Confirmações": res["confirmacoes"],
-            "Score": res["score"],
-            "Status / Sugestão": res["status"]
-        })
-    
-    df_exibicao = pd.DataFrame(dados_tabela)
-    st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
-
-    # Disparo de Alerta
-    res_ultimo = analisar_rodada_especifica(st.session_state.historico)
-    if res_ultimo["score_num"] >= 4:
-        st.error(f"🚨 SINAL CONFIRMADO: {res_ultimo['alvos']}")
-        if not st.session_state.sinal_ativo and st.session_state.alvos_sinal != res_ultimo["alvos"]:
-            st.session_state.sinal_ativo = True
-            st.session_state.alvos_sinal = res_ultimo["alvos"]
-            st.session_state.tentativa_atual = 0
-            enviar_alerta_telegram(res_ultimo["ultimo"], res_ultimo["score_num"], res_ultimo["alvos"], [res_ultimo["status"]])
-            
-        if st.button("📤 Reenviar Alerta para Telegram"):
-            sucesso, msg = enviar_alerta_telegram(res_ultimo["ultimo"], res_ultimo["score_num"], res_ultimo["alvos"], [res_ultimo["status"]])
-            if sucesso:
-                st.success(msg)
-            else:
-                st.error(msg)
-else:
-    st.info("Aguardando dados da API ou inserção manual no painel lateral...")
-
-# ==========================================
-# 6. MÓDULO DE ESTATÍSTICAS E GRÁFICOS (PLOTLY)
-# ==========================================
-if st.session_state.historico:
-    st.markdown("---")
-    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 500)")
-    
-    total_disponivel = len(st.session_state.historico)
-    max_amostra = min(500, total_disponivel)
-    
-    qtd_rodadas = st.slider(
-        "Selecione o tamanho da amostra (Últimas X rodadas):", 
-        min_value=min(10, total_disponivel), 
-        max_value=max(10, max_amostra), 
-        value=max_amostra, 
-        step=5
-    )
-    
-    amostra = st.session_state.historico[-qtd_rodadas:]
-    total_amostra = len(amostra)
-    
-    col_g1, col_g2, col_g3 = st.columns(3)
-    
-    # Card 1: Quentes & Frios
-    with col_g1:
-        st.markdown("### 📊 QUENTES/FRIOS")
-        contagem = pd.Series(amostra).value_counts()
-        quentes = contagem.head(5).index.tolist()
-        frios = contagem.tail(5).index.tolist()
-        
-        st.write(f"🔥 **Mais Frequentes (Quentes):** {quentes}")
-        st.write(f"🧊 **Menos Frequentes (Frios):** {frios}")
-        
-        freq_df = pd.DataFrame({'Número': contagem.index.astype(str), 'Frequência': contagem.values})
-        fig_freq = px.bar(freq_df.head(10), x='Número', y='Frequência', title="Top 10 Números na Amostra", color='Frequência')
-        fig_freq.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig_freq, use_container_width=True)
-        
-    # Card 2: Estatística Avançada
-    with col_g2:
-        st.markdown("### 📊 AVANÇADA")
-        
-        d1 = sum(1 for n in amostra if 1 <= n <= 12)
-        d2 = sum(1 for n in amostra if 13 <= n <= 24)
-        d3 = sum(1 for n in amostra if 25 <= n <= 36)
-        
-        c1 = sum(1 for n in amostra if n > 0 and n % 3 == 1)
-        c2 = sum(1 for n in amostra if n > 0 and n % 3 == 2)
-        c3 = sum(1 for n in amostra if n > 0 and n % 3 == 0)
-        
-        par = sum(1 for n in amostra if n > 0 and n % 2 == 0)
-        impar = sum(1 for n in amostra if n % 2 != 0)
-        
-        baixas = sum(1 for n in amostra if 1 <= n <= 18)
-        altas = sum(1 for n in amostra if 19 <= n <= 36)
-        
-        df_duzias = pd.DataFrame({
-            'Grupo': ['1ª Dúzia', '2ª Dúzia', '3ª Dúzia', '1ª Coluna', '2ª Coluna', '3ª Coluna'],
-            'Porcentagem': [
-                round((d1/total_amostra)*100, 1), round((d2/total_amostra)*100, 1), round((d3/total_amostra)*100, 1),
-                round((c1/total_amostra)*100, 1), round((c2/total_amostra)*100, 1), round((c3/total_amostra)*100, 1)
-            ]
-        })
-        
-        fig_adv = px.bar(df_duzias, x='Grupo', y='Porcentagem', text='Porcentagem', title="Distribuição Dúzias e Colunas (%)")
-        fig_adv.update_traces(texttemplate='%{text}%', textposition='outside')
-        fig_adv.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig_adv, use_container_width=True)
-        
-        st.caption(f"**Par:** {round((par/total_amostra)*100)}% | **Ímpar:** {round((impar/total_amostra)*100)}% | **1-18:** {round((baixas/total_amostra)*100)}% | **19-36:** {round((altas/total_amostra)*100)}%")
-
-    # Card 3: Mapa de Calor
-    with col_g3:
-        st.markdown(f"### 📊 ÚLTIMAS {qtd_rodadas}")
-        
-        matriz_freq = {n: amostra.count(n) for n in range(0, 37)}
-        
-        st.write("🔥 **Mapa de Calor da Mesa (0 a 36):**")
-        
-        grid_rows = [
-            [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
-            [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
-            [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
-        ]
-        
-        z_vals = [[matriz_freq[n] for n in row] for row in grid_rows]
-        text_vals = [[f"{n}<br>({matriz_freq[n]})" for n in row] for row in grid_rows]
-        
-        fig_grid = go.Figure(data=go.Heatmap(
-            z=z_vals,
-            text=text_vals,
-            texttemplate="%{text}",
-            colorscale='Reds',
-            showscale=False
-        ))
-        
-        fig_grid.update_layout(
-            template="plotly_dark",
-            height=280,
-            margin=dict(l=5, r=5, t=10, b=5),
-            xaxis=dict(showticklabels=False),
-            yaxis=dict(showticklabels=False)
-        )
-        st.plotly_chart(fig_grid, use_container_width=True)
+        etapa_nome = etapas.get(st.session_state.tentativa_atual
