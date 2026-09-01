@@ -66,10 +66,10 @@ USER_AGENTS = [
 # ==========================================
 URLS_ROLETAS = {
     "Cassino ao Vivo Immersive Roulette": {
-        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4457-4723-a97d-f3703302d5cc/history?timezone=America%2FSao_Paulo&subject=filter&limit=500"
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4457-4723-a97d-f3703302d5cc/history?timezone=America%2FSao_Paulo&subject=filter&limit=100"
     },
     "Cassino ao Vivo Swedish Roulette": {
-        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-10d2-b479-a28a01c6ee13/history?timezone=America%2FSao_Paulo&subject=filter&limit=500"
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-10d2-b479-a28a01c6ee13/history?timezone=America%2FSao_Paulo&subject=filter&limit=100"
     }
 }
 
@@ -81,20 +81,15 @@ def buscar_dados_roleta_url(roleta_nome):
         return st.session_state.get("historico", [])
         
     try:
-        # Token anti-cache dinâmico exigido pela API
-        cb_token = f"{int(time.time() * 1000)}-{str(uuid.uuid4())[:18]}"
-        url_base = endpoint.split("&_cb=")[0]
-        url_com_cb = f"{url_base}&_cb={cb_token}"
+        cb_token = f"{int(time.time() * 1000)}"
+        url_limpa = endpoint.split("&_cb=")[0]
+        url_com_cb = f"{url_limpa}&_cb={cb_token}"
         
         headers = {
             "User-Agent": random.choice(USER_AGENTS),
             "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
             "Origin": "https://www.tipminer.com",
-            "Referer": "https://www.tipminer.com/",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-site"
+            "Referer": "https://www.tipminer.com/"
         }
         
         res = requests.get(url_com_cb, headers=headers, timeout=8)
@@ -103,8 +98,12 @@ def buscar_dados_roleta_url(roleta_nome):
             dados = res.json()
             numeros = []
             
-            # Trata respostas do tipo Array direto ou Objeto com chave 'data'
-            itens = dados if isinstance(dados, list) else dados.get("data", [])
+            if isinstance(dados, list):
+                itens = dados
+            elif isinstance(dados, dict):
+                itens = dados.get("data", dados.get("results", []))
+            else:
+                itens = []
             
             for item in itens:
                 if isinstance(item, dict) and "result" in item:
@@ -113,14 +112,13 @@ def buscar_dados_roleta_url(roleta_nome):
                         numeros.append(int(val))
             
             if numeros:
-                # Inverte a lista para manter a ordem cronológica (Antigo -> Recente)
                 return numeros[::-1]
             else:
-                st.sidebar.warning("⚠️ Conectado, aguardando novos dados...")
+                st.sidebar.warning("⚠️ Lista vazia retornada pela API.")
         else:
             st.sidebar.error(f"⚠️ Status API: {res.status_code}")
     except Exception as e:
-        st.sidebar.error(f"⚠️ Erro ao conectar na API: {e}")
+        st.sidebar.error(f"⚠️ Erro na captura: {e}")
         
     return st.session_state.get("historico", [])
 
