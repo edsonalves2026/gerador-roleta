@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+import random
 import plotly.express as px
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
@@ -52,6 +53,13 @@ TABELA_PUXADORES_FIXA = {
     36: [16, 36, 1, 9]
 }
 
+# Lista de User-Agents para evitar bloqueio no Cloud
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+]
+
 # ==========================================
 # 2. CONFIGURAÇÃO DAS ROLETAS E ENDPOINTS
 # ==========================================
@@ -73,28 +81,30 @@ def buscar_dados_roleta_url(roleta_nome):
         
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "User-Agent": random.choice(USER_AGENTS),
             "Accept": "application/json, text/plain, */*",
             "Origin": "https://tipminer.com",
-            "Referer": "https://tipminer.com/"
+            "Referer": "https://tipminer.com/",
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
         }
         
-        res = requests.get(endpoint, headers=headers, timeout=10)
+        res = requests.get(endpoint, headers=headers, timeout=12)
         
         if res.status_code == 200:
             dados = res.json()
             numeros = []
-            if isinstance(dados, list):
-                for item in dados:
-                    if isinstance(item, dict) and "result" in item:
-                        val = str(item.get("result", "")).strip()
-                        if val.isdigit():
-                            numeros.append(int(val))
+            
+            itens = dados if isinstance(dados, list) else dados.get("data", [])
+            for item in itens:
+                if isinstance(item, dict) and "result" in item:
+                    val = str(item.get("result", "")).strip()
+                    if val.isdigit():
+                        numeros.append(int(val))
             
             if numeros:
                 return numeros[::-1]
-    except Exception:
-        pass
+    except Exception as e:
+        st.sidebar.error(f"Erro ao buscar API: {e}")
         
     return st.session_state.get("historico", [])
 
