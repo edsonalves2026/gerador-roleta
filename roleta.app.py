@@ -14,8 +14,8 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(page_title="Radar de Roleta Pro - Motor Avançado", layout="wide")
 st_autorefresh(interval=5000, key="autoupdate_roleta")
 
-TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "")
+TELEGRAM_BOT_TOKEN = st.secrets.get("7779371878:AAGFkAZFV1y51JMMoyhEAJO-xrDryNw-vBw", "")
+TELEGRAM_CHAT_ID = st.secrets.get("-1003738768836", "")
 
 CILINDRO_EUROPEU = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
