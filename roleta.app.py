@@ -154,12 +154,15 @@ def enviar_mensagem_telegram(mensagem):
     except Exception as e:
         return False, str(e)
 
-def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes, tier_nome=""):
+def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes, tier_nome="", posicao_rank=None, taxa_acerto=None):
     texto_detalhes = "\n".join([f"• {d}" for d in detalhes])
     prefixo_tier = f"🏆 *Classificação:* `{tier_nome}`\n" if tier_nome else ""
+    str_rank = f"📊 *Posição no Ranking:* `#{posicao_rank}º lugar` ({taxa_acerto}% de assertividade)\n" if posicao_rank else ""
+    
     mensagem = (
         f"🚨 *SINAL CONFIRMADO - RADAR DE ROLETA*\n\n"
         f"{prefixo_tier}"
+        f"{str_rank}"
         f"📌 *Último Número:* `{ultimo_num}`\n"
         f"📊 *Score de Assertividade:* `{score}/5`\n"
         f"🎯 *Alvos Sugeridos:* `{alvos}`\n"
@@ -491,8 +494,16 @@ def processar_novo_numero(num_novo):
         res_ultimo = analisar_rodada_especifica(historico_analise)
         
         if res_ultimo["score_num"] >= 4:
-            tiers, _ = obter_tiers_cache()
+            tiers, df_rank = obter_tiers_cache()
             padrao = res_ultimo["padrao_nome"]
+            
+            # Posição e Taxa de Acerto no Ranking
+            posicao_rank = None
+            taxa_acerto = None
+            if not df_rank.empty and padrao in df_rank["Padrão"].values:
+                idx = df_rank[df_rank["Padrão"] == padrao].index[0]
+                posicao_rank = idx + 1
+                taxa_acerto = df_rank.loc[idx, "Taxa de Acerto (%)"]
             
             tier_do_padrao = "Fora dos Tiers"
             if padrao in tiers.get("ELITE_TOP_3", []):
@@ -535,7 +546,9 @@ def processar_novo_numero(num_novo):
                     res_ultimo["score_num"],
                     res_ultimo["alvos"],
                     [f"Padrão: {padrao}", f"Filtro: {filtro_hibrido_opcao}"],
-                    tier_nome=tier_do_padrao
+                    tier_nome=tier_do_padrao,
+                    posicao_rank=posicao_rank,
+                    taxa_acerto=taxa_acerto
                 )
 
 # Modo Online / Manual
@@ -659,11 +672,20 @@ if st.session_state.historico:
         st.error(f"🚨 SINAL IDENTIFICADO: {res_ultimo['alvos']}")
             
         if st.button("📤 Reenviar Alerta para Telegram"):
+            posicao_rank = None
+            taxa_acerto = None
+            if not df_rank.empty and res_ultimo["padrao_nome"] in df_rank["Padrão"].values:
+                idx = df_rank[df_rank["Padrão"] == res_ultimo["padrao_nome"]].index[0]
+                posicao_rank = idx + 1
+                taxa_acerto = df_rank.loc[idx, "Taxa de Acerto (%)"]
+            
             sucesso, msg = enviar_alerta_telegram(
                 res_ultimo["ultimo"],
                 res_ultimo["score_num"],
                 res_ultimo["alvos"],
-                [res_ultimo["status"]]
+                [res_ultimo["status"]],
+                posicao_rank=posicao_rank,
+                taxa_acerto=taxa_acerto
             )
             if sucesso:
                 st.success(msg)
