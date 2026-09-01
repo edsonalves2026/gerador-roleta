@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import cloudscraper
+import requests
 import plotly.express as px
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
@@ -72,7 +72,6 @@ def buscar_dados_roleta_url(roleta_nome):
         return st.session_state.get("historico", [])
         
     try:
-        scraper = cloudscraper.create_scraper()
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
@@ -80,7 +79,7 @@ def buscar_dados_roleta_url(roleta_nome):
             "Referer": "https://tipminer.com/"
         }
         
-        res = scraper.get(endpoint, headers=headers, timeout=10)
+        res = requests.get(endpoint, headers=headers, timeout=10)
         
         if res.status_code == 200:
             dados = res.json()
@@ -108,8 +107,7 @@ def enviar_mensagem_telegram(mensagem):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "Markdown"}
     try:
-        scraper = cloudscraper.create_scraper()
-        res = scraper.post(url, json=payload, timeout=5)
+        res = requests.post(url, json=payload, timeout=5)
         return (True, "Enviado com sucesso!") if res.status_code == 200 else (False, res.text)
     except Exception as e:
         return False, str(e)
@@ -422,9 +420,7 @@ if st.session_state.historico:
     
     col_g1, col_g2, col_g3 = st.columns(3)
     
-    # ------------------------------------------
     # Card 1: Quentes & Frios
-    # ------------------------------------------
     with col_g1:
         st.markdown("### 📊 QUENTES/FRIOS")
         contagem = pd.Series(amostra).value_counts()
@@ -439,9 +435,7 @@ if st.session_state.historico:
         fig_freq.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_freq, use_container_width=True)
         
-    # ------------------------------------------
     # Card 2: Estatística Avançada
-    # ------------------------------------------
     with col_g2:
         st.markdown("### 📊 AVANÇADA")
         
@@ -474,9 +468,7 @@ if st.session_state.historico:
         
         st.caption(f"**Par:** {round((par/total_amostra)*100)}% | **Ímpar:** {round((impar/total_amostra)*100)}% | **1-18:** {round((baixas/total_amostra)*100)}% | **19-36:** {round((altas/total_amostra)*100)}%")
 
-    # ------------------------------------------
     # Card 3: Mapa de Calor
-    # ------------------------------------------
     with col_g3:
         st.markdown(f"### 📊 ÚLTIMAS {qtd_rodadas}")
         
