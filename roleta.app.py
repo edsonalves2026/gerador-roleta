@@ -98,6 +98,7 @@ def buscar_dados_roleta_url(roleta_nome):
             dados = res.json()
             numeros = []
             
+            # Tratamento flexível para estruturas JSON variadas
             if isinstance(dados, list):
                 itens = dados
             elif isinstance(dados, dict):
@@ -106,10 +107,12 @@ def buscar_dados_roleta_url(roleta_nome):
                 itens = []
             
             for item in itens:
-                if isinstance(item, dict) and "result" in item:
-                    val = item.get("result")
+                if isinstance(item, dict):
+                    val = item.get("result", item.get("number"))
                     if val is not None and str(val).strip().isdigit():
                         numeros.append(int(val))
+                elif isinstance(item, (int, str)) and str(item).strip().isdigit():
+                    numeros.append(int(item))
             
             if numeros:
                 return numeros[::-1]
