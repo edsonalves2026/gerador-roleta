@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import cloudscraper
+import plotly.express as px
+import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
 
 # ==========================================
@@ -11,7 +13,6 @@ st.set_page_config(page_title="Radar de Roleta Pro - Motor Avançado", layout="w
 # Recarrega a cada 5 segundos
 st_autorefresh(interval=5000, key="autoupdate_roleta")
 
-# Obtém credenciais dos Secrets do Streamlit de forma segura
 TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "")
 
@@ -52,14 +53,14 @@ TABELA_PUXADORES_FIXA = {
 }
 
 # ==========================================
-# 2. CONFIGURAÇÃO DAS ROLETAS E ENDPOINTS
+# 2. CONFIGURAÇÃO DAS ROLETAS E ENDPOINTS (TIPMINER)
 # ==========================================
 URLS_ROLETAS = {
     "Cassino ao Vivo Immersive Roulette": {
-        "api_endpoint": "https://esportesdasorte.bet.br/api/roulette/recentResults?tableId=evol_7x0b1tgh7agmf6hv"
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4457-4723-a97d-f3703302d5cc/history?limit=500&timezone=America%2FSao_Paulo"
     },
-    "Cassino ao Vivo Auto-Roulette": {
-        "api_endpoint": "https://esportesdasorte.bet.br/api/roulette/recentResults?tableId=evol_48z5pjps3ntvqc1b"
+    "Cassino ao Vivo Swedish Roulette": {
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-10d2-b479-a28a01c6ee13/history?limit=500&timezone=America%2FSao_Paulo"
     }
 }
 
@@ -71,50 +72,31 @@ def buscar_dados_roleta_url(roleta_nome):
         return st.session_state.get("historico", [])
         
     try:
-        # Instancia o scraper do cloudscraper para simular um navegador real
         scraper = cloudscraper.create_scraper()
-        
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
-            "Referer": "https://esportesdasorte.bet.br/",
-            "Origin": "https://esportesdasorte.bet.br"
+            "Origin": "https://tipminer.com",
+            "Referer": "https://tipminer.com/"
         }
         
         res = scraper.get(endpoint, headers=headers, timeout=10)
         
         if res.status_code == 200:
             dados = res.json()
-            
-            recent = []
-            if isinstance(dados, dict):
-                if "args" in dados and isinstance(dados["args"], dict):
-                    recent = dados["args"].get("recentResults", [])
-                elif "data" in dados:
-                    recent = dados.get("data", [])
-                elif "result" in dados:
-                    recent = dados.get("result", [])
-            elif isinstance(dados, list):
-                recent = dados
-
             numeros = []
-            for item in recent:
-                if isinstance(item, dict):
-                    val = str(item.get("result", item.get("number", "")))
-                elif isinstance(item, list) and len(item) > 0:
-                    val = str(item[0])
-                else:
-                    val = str(item)
-                
-                val_clean = val.replace("[", "").replace("]", "").replace('"', '').strip()
-                if val_clean.isdigit():
-                    numeros.append(int(val_clean))
+            if isinstance(dados, list):
+                for item in dados:
+                    if isinstance(item, dict) and "result" in item:
+                        val = str(item.get("result", "")).strip()
+                        if val.isdigit():
+                            numeros.append(int(val))
             
             if numeros:
                 return numeros[::-1]
     except Exception:
         pass
-    
+        
     return st.session_state.get("historico", [])
 
 # ==========================================
@@ -354,7 +336,7 @@ else:
         st.session_state.tentativa_atual = 0
         st.session_state.ultimo_resultado = None
 
-# Visualização dos dados
+# Visualização da Esteira
 st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
 if st.session_state.historico:
     esteira = st.session_state.historico[-14:]
@@ -408,7 +390,6 @@ if st.session_state.historico:
             st.session_state.sinal_ativo = True
             st.session_state.alvos_sinal = res_ultimo["alvos"]
             st.session_state.tentativa_atual = 0
-            # Auto dispara alerta para Telegram
             enviar_alerta_telegram(res_ultimo["ultimo"], res_ultimo["score_num"], res_ultimo["alvos"], [res_ultimo["status"]])
             
         if st.button("📤 Reenviar Alerta para Telegram"):
@@ -417,3 +398,117 @@ if st.session_state.historico:
                 st.success(msg)
             else:
                 st.error(msg)
+
+# ==========================================
+# 6. MÓDULO DE ESTATÍSTICAS E GRÁFICOS (0 A 500 RODADAS)
+# ==========================================
+if st.session_state.historico:
+    st.markdown("---")
+    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 500)")
+    
+    total_disponivel = len(st.session_state.historico)
+    max_amostra = min(500, total_disponivel)
+    
+    # Slider individual para controle de escopo (escala de 0 a 500)
+    qtd_rodadas = st.slider(
+        "Selecione o tamanho da amostra (Últimas X rodadas):", 
+        min_value=min(10, total_disponivel), 
+        max_value=max(10, max_amostra), 
+        value=max_amostra, 
+        step=5
+    )
+    
+    amostra = st.session_state.historico[-qtd_rodadas:]
+    total_amostra = len(amostra)
+    
+    col_g1, col_g2, col_g3 = st.columns(3)
+    
+    # ------------------------------------------
+    # Card 1: Quentes & Frios
+    # ------------------------------------------
+    with col_g1:
+        st.markdown("### 📊 Estatísticas: QUENTES/FRIOS")
+        contagem = pd.Series(amostra).value_counts()
+        quentes = contagem.head(5).index.tolist()
+        frios = contagem.tail(5).index.tolist()
+        
+        st.write(f"🔥 **Mais Frequentes (Quentes):** {quentes}")
+        st.write(f"🧊 **Menos Frequentes (Frios):** {frios}")
+        
+        # Gráfico de frequência dos números
+        freq_df = pd.DataFrame({'Número': contagem.index.astype(str), 'Frequência': contagem.values})
+        fig_freq = px.bar(freq_df.head(10), x='Número', y='Frequência', title="Top 10 Números na Amostra", color='Frequência')
+        fig_freq.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig_freq, use_container_width=True)
+        
+    # ------------------------------------------
+    # Card 2: Estatística Avançada (Dúzias / Colunas / Externas)
+    # ------------------------------------------
+    with col_g2:
+        st.markdown("### 📊 Estatísticas: AVANÇADA")
+        
+        d1 = sum(1 for n in amostra if 1 <= n <= 12)
+        d2 = sum(1 for n in amostra if 13 <= n <= 24)
+        d3 = sum(1 for n in amostra if 25 <= n <= 36)
+        
+        c1 = sum(1 for n in amostra if n > 0 and n % 3 == 1)
+        c2 = sum(1 for n in amostra if n > 0 and n % 3 == 2)
+        c3 = sum(1 for n in amostra if n > 0 and n % 3 == 0)
+        
+        par = sum(1 for n in amostra if n > 0 and n % 2 == 0)
+        impar = sum(1 for n in amostra if n % 2 != 0)
+        
+        baixas = sum(1 for n in amostra if 1 <= n <= 18)
+        altas = sum(1 for n in amostra if 19 <= n <= 36)
+        
+        df_duzias = pd.DataFrame({
+            'Grupo': ['1ª Dúzia', '2ª Dúzia', '3ª Dúzia', '1ª Coluna', '2ª Coluna', '3ª Coluna'],
+            'Porcentagem': [
+                round((d1/total_amostra)*100, 1), round((d2/total_amostra)*100, 1), round((d3/total_amostra)*100, 1),
+                round((c1/total_amostra)*100, 1), round((c2/total_amostra)*100, 1), round((c3/total_amostra)*100, 1)
+            ]
+        })
+        
+        fig_adv = px.bar(df_duzias, x='Grupo', y='Porcentagem', text='Porcentagem', title="Distribuição Dúzias e Colunas (%)")
+        fig_adv.update_traces(texttemplate='%{text}%', textposition='outside')
+        fig_adv.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig_adv, use_container_width=True)
+        
+        st.caption(f"**Par:** {round((par/total_amostra)*100)}% | **Ímpar:** {round((impar/total_amostra)*100)}% | **1-18:** {round((baixas/total_amostra)*100)}% | **19-36:** {round((altas/total_amostra)*100)}%")
+
+    # ------------------------------------------
+    # Card 3: Mapa de Calor / Matriz da Mesa (Últimas 500)
+    # ------------------------------------------
+    with col_g3:
+        st.markdown(f"### 📊 Estatísticas: ÚLTIMAS {qtd_rodadas}")
+        
+        matriz_freq = {n: amostra.count(n) for n in range(0, 37)}
+        
+        st.write("🔥 **Mapa de Calor da Mesa (0 a 36):**")
+        
+        # Criação do grid visual idêntico à mesa
+        grid_rows = [
+            [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
+            [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+            [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
+        ]
+        
+        z_vals = [[matriz_freq[n] for n in row] for row in grid_rows]
+        text_vals = [[f"{n}<br>({matriz_freq[n]})" for n in row] for row in grid_rows]
+        
+        fig_grid = go.Figure(data=go.Heatmap(
+            z=z_vals,
+            text=text_vals,
+            texttemplate="%{text}",
+            colorscale='Reds',
+            showscale=False
+        ))
+        
+        fig_grid.update_layout(
+            template="plotly_dark",
+            height=280,
+            margin=dict(l=5, r=5, t=10, b=5),
+            xaxis=dict(showticklabels=False),
+            yaxis=dict(showticklabels=False)
+        )
+        st.plotly_chart(fig_grid, use_container_width=True)
