@@ -1,6 +1,5 @@
 streamlit
 pandas
-cloudscraper
 plotly
+requests
 streamlit-autorefresh
-requeriments
