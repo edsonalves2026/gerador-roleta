@@ -68,6 +68,8 @@ TABELA_PUXADORES_FIXA = {
     36: [0, 0, 0, 0]
 }
 
+NUMEROS_VERMELHOS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
+
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
@@ -761,7 +763,7 @@ if st.session_state.historico:
         st.plotly_chart(fig_adv, use_container_width=True)
         
         st.caption(f"**Par:** {round((par/total_amostra)*100)}% | **Ímpar:** {round((impar/total_amostra)*100)}% | **1-18:** {round((baixas/total_amostra)*100)}% | **19-36:** {round((altas/total_amostra)*100)}%")
-    
+
     with col_g3:
         st.markdown(f"### 📊 ÚLTIMAS {qtd_rodadas}")
         
@@ -770,20 +772,39 @@ if st.session_state.historico:
         st.write("🔥 **Mapa de Calor da Mesa (0 a 36):**")
         
         grid_rows = [
-            [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
-            [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
-            [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
+            [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
+            [0, 2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+            [0, 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
         ]
         
         z_vals = [[matriz_freq[n] for n in row] for row in grid_rows]
         text_vals = [[f"{n}<br>({matriz_freq[n]})" for n in row] for row in grid_rows]
         
+        # Mapeamento de Cores Personalizadas (Vermelho, Preto e Branco para o 0)
+        custom_colorscale = [
+            [0.0, "#FFFFFF"],   # Branco para o Zero (0)
+            [0.5, "#1E1E1E"],   # Preto / Cinza Escuro para os números pretos
+            [1.0, "#D32F2F"]    # Vermelho para os números vermelhos
+        ]
+
+        def calcular_valor_cor(n):
+            if n == 0:
+                return 0.0
+            elif n in NUMEROS_VERMELHOS:
+                return 1.0
+            else:
+                return 0.5
+
+        color_vals = [[calcular_valor_cor(n) for n in row] for row in grid_rows]
+
         fig_grid = go.Figure(data=go.Heatmap(
-            z=z_vals,
+            z=color_vals,
             text=text_vals,
             texttemplate="%{text}",
-            colorscale='Reds',
-            showscale=False
+            colorscale=custom_colorscale,
+            showscale=False,
+            zmin=0.0,
+            zmax=1.0
         ))
         
         fig_grid.update_layout(
