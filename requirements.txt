@@ -3,4 +3,4 @@ pandas
 plotly
 requests
 streamlit-autorefresh
-counter
+Counter
