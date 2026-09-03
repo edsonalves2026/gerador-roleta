@@ -10,7 +10,7 @@ from streamlit_autorefresh import st_autorefresh
 # ==========================================
 # 1. CONFIGURAÇÃO E CREDENCIAIS SEGURAS
 # ==========================================
-st.set_page_config(page_title="Radar de Roleta Pro - Motor Avançado", layout="wide")
+st.set_page_config(page_title="Radar de Roleta Pro - Painel Completo", layout="wide")
 st_autorefresh(interval=5000, key="autoupdate_roleta")
 
 TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
@@ -152,11 +152,6 @@ def obter_puxadores_otimizados(numero_sorteado, historico_recentes):
     intersecao = [num for num in puxadores_dinamicos if num in puxadores_fixos]
     return intersecao if intersecao else (puxadores_dinamicos[:4] if puxadores_dinamicos else puxadores_fixos)
 
-def checar_estrategia_fantasma(historico):
-    if len(historico) >= 3 and all(n in GRUPO_FANTASMA for n in historico[-3:]):
-        return {"status": "ATIVADO", "principais": [9, 19, 27]}
-    return {"status": "INATIVO"}
-
 def validar_gatilho_sequencial_brk(historico_200):
     if not historico_200 or len(historico_200) < 2:
         return {"sinal_ativo": False}
@@ -188,32 +183,23 @@ def validar_gatilho_sequencial_brk(historico_200):
     }
 
 # ==========================================
-# 3. NOVO CÁLCULO DE SCORE PONDERADO 🔥
+# 3. CÁLCULO DE SCORE PONDERADO 🔥
 # ==========================================
 def calcular_score_ponderado_num(num, sub_historico, res_brk, puxadores, vizinhos):
     score = 0.0
-    pontos = {
-        "vizinho": 0.0,
-        "quente_100r": 0.0,
-        "dois_filtros": 0.0,
-        "px_top1": 0.0,
-        "ausente": 0.0
-    }
+    pontos = {"vizinho": 0.0, "quente_100r": 0.0, "dois_filtros": 0.0, "px_top1": 0.0, "ausente": 0.0}
     detalhes = []
 
-    # 1. Ausente no BRK (+3.0)
     if res_brk.get("sinal_ativo") and num in res_brk.get("prioridade_maxima", []):
         score += 3.0
         pontos["ausente"] = 3.0
         detalhes.append("Ausente(+3.0)")
 
-    # 2. É Puxador Top 1 (+2.5)
     if puxadores and num == puxadores[0]:
         score += 2.5
         pontos["px_top1"] = 2.5
         detalhes.append("PxTop1(+2.5)")
 
-    # 3. Apareceu em 2 ou mais filtros (+2.0)
     qtd_filtros = sum([
         1 if num in puxadores else 0,
         1 if num in [vizinhos["esq_1"], vizinhos["dir_1"]] else 0,
@@ -225,16 +211,13 @@ def calcular_score_ponderado_num(num, sub_historico, res_brk, puxadores, vizinho
         pontos["dois_filtros"] = 2.0
         detalhes.append("+2Filtros(+2.0)")
 
-    # 4. Quente nas 200 rodadas (+1.0)
     if len(sub_historico) >= 50:
         amostra = sub_historico[-200:]
-        frequencia = amostra.count(num)
-        if frequencia > (len(amostra) / 37):
+        if amostra.count(num) > (len(amostra) / 37):
             score += 1.0
             pontos["quente_100r"] = 1.0
             detalhes.append("Quente100R(+1.0)")
 
-    # 5. É Vizinho Físico (+1.0)
     if num in [vizinhos["esq_1"], vizinhos["dir_1"]]:
         score += 1.0
         pontos["vizinho"] = 1.0
@@ -255,7 +238,7 @@ def analisar_rodada_especifica(sub_historico):
     filtros_ativos_contagem = 0
     if res_brk["sinal_ativo"]: filtros_ativos_contagem += 1
     if puxadores: filtros_ativos_contagem += 1
-    filtros_ativos_contagem += 1 # Vizinhos sempre ativos
+    filtros_ativos_contagem += 1
     if invertido is not None: filtros_ativos_contagem += 1
 
     alvos_brutos = set()
@@ -264,10 +247,7 @@ def analisar_rodada_especifica(sub_historico):
     alvos_brutos.update([vizinhos["esq_1"], vizinhos["dir_1"]])
     if invertido is not None: alvos_brutos.add(invertido)
 
-    # Avalia Score Ponderado 🔥 de cada alvo
-    scores_alvos = {}
-    pontos_alvos = {}
-    detalhes_alvos = {}
+    scores_alvos, pontos_alvos, detalhes_alvos = {}, {}, {}
     for num in alvos_brutos:
         sc, pts, det = calcular_score_ponderado_num(num, sub_historico, res_brk, puxadores, vizinhos)
         scores_alvos[num] = sc
@@ -276,8 +256,6 @@ def analisar_rodada_especifica(sub_historico):
 
     alvos_ordenados = sorted(scores_alvos.keys(), key=lambda x: scores_alvos[x], reverse=True)
     score_maximo = max(scores_alvos.values()) if scores_alvos else 0.0
-
-    # Ponderação média do Top Alvo para preencher a linha da tabela
     top_num = alvos_ordenados[0] if alvos_ordenados else None
     top_pontos = pontos_alvos.get(top_num, {"vizinho": 0.0, "quente_100r": 0.0, "dois_filtros": 0.0, "px_top1": 0.0, "ausente": 0.0})
 
@@ -302,7 +280,7 @@ def analisar_rodada_especifica(sub_historico):
     }
 
 # ==========================================
-# 4. DISPARO DE ALERTA TELEGRAM (RIGOROSO ≥ 7.5)
+# 4. DISPARO TELEGRAM (RIGOROSO ≥ 7.5)
 # ==========================================
 def enviar_alerta_telegram_score75(ultimo_num, alvos_filtrados, scores_alvos, detalhes_alvos):
     linhas_alvos = []
@@ -312,7 +290,6 @@ def enviar_alerta_telegram_score75(ultimo_num, alvos_filtrados, scores_alvos, de
         linhas_alvos.append(f"• *{num:02d}* ➔ Score 🔥 `{sc}` _({det})_")
 
     texto_alvos = "\n".join(linhas_alvos)
-
     mensagem = (
         f"🚨 *SINAL DE ALTA CONFIRMAÇÃO (SCORE ≥ 7.5)* 🚨\n\n"
         f"📌 *Último Número:* `{ultimo_num}`\n"
@@ -332,7 +309,7 @@ def enviar_resultado_telegram(tipo, numero, etapa=""):
 # ==========================================
 # 5. EXECUÇÃO DO STREAMLIT & ENGINE
 # ==========================================
-st.title("🎯 Radar de Roleta Pro - Tabela com Score 🔥 Ponderado")
+st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
 if "historico" not in st.session_state:
     st.session_state.historico = []
@@ -340,6 +317,8 @@ if "sinal_ativo" not in st.session_state:
     st.session_state.sinal_ativo = False
     st.session_state.alvos_sinal = []
     st.session_state.tentativa_atual = 0
+if "ultimo_status_resultado" not in st.session_state:
+    st.session_state.ultimo_status_resultado = "Aguardando primeiro sinal..."
 
 st.sidebar.header("🕹️ Painel de Operação")
 modo_operacao = st.sidebar.selectbox("🌐 Modo de Operação:", ["On-line (Captura Automática)", "Off-line (Digitação Manual)"])
@@ -354,12 +333,14 @@ def processar_novo_numero(num_novo):
         alvos_com_zero = set(st.session_state.alvos_sinal + [0])
         if num_novo in alvos_com_zero:
             enviar_resultado_telegram("GREEN", num_novo, etapa_nome)
+            st.session_state.ultimo_status_resultado = f"Resultado do Último Sinal: GREEN ✅ ({etapa_nome})"
             st.session_state.sinal_ativo = False
             st.session_state.tentativa_atual = 0
             st.session_state.alvos_sinal = []
             return
         elif st.session_state.tentativa_atual >= 3:
             enviar_resultado_telegram("LOSS", num_novo)
+            st.session_state.ultimo_status_resultado = "Resultado do Último Sinal: RED ❌"
             st.session_state.sinal_ativo = False
             st.session_state.tentativa_atual = 0
             st.session_state.alvos_sinal = []
@@ -383,7 +364,7 @@ def processar_novo_numero(num_novo):
                 res["detalhes_alvos"]
             )
 
-# Controle de Dados (Online x Manual)
+# Captura de Dados
 if modo_operacao == "On-line (Captura Automática)":
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
     if novos_dados and novos_dados != st.session_state.historico:
@@ -400,10 +381,86 @@ else:
             st.rerun()
 
 # ==========================================
-# 6. TABELA ANALÍTICA COM COLUNAS DE SCORE 🔥
+# 6. EXIBIÇÃO VISUAL COMPLETA
 # ==========================================
 if st.session_state.historico:
+    # 1. ESTEIRA TEMPORAL
+    st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
+    cols_esteira = st.columns(14)
+    janela_14 = st.session_state.historico[:14]
+    for i, num in enumerate(janela_14):
+        with cols_esteira[i]:
+            st.caption(f"Pos {i+1:02d}")
+            st.markdown(f"### **{num}**")
+
+    if "GREEN" in st.session_state.ultimo_status_resultado:
+        st.success(f"🎉 {st.session_state.ultimo_status_resultado}")
+    elif "RED" in st.session_state.ultimo_status_resultado:
+        st.error(f"⚠️ {st.session_state.ultimo_status_resultado}")
+
     st.markdown("---")
+
+    # 2. GRÁFICOS VISUAIS E PAINEL ESTATÍSTICO (PLOTLY)
+    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 200)")
+    
+    amostra_200 = st.session_state.historico[:200]
+    freq_series = pd.Series(amostra_200).value_counts()
+    
+    col_g1, col_g2, col_g3 = st.columns([1, 1, 1.2])
+
+    with col_g1:
+        st.markdown("#### 🔥 QUENTES / FRIOS")
+        quentes = freq_series.head(5).index.tolist()
+        frios = freq_series.tail(5).index.tolist()
+        st.write(f"🔥 **Mais Frequentes:** `{quentes}`")
+        st.write(f"🧊 **Menos Frequentes:** `{frios}`")
+        
+        fig_top = px.bar(
+            x=[str(x) for x in freq_series.head(10).index],
+            y=freq_series.head(10).values,
+            labels={'x': 'Número', 'y': 'Frequência'},
+            title="Top 10 Números na Amostra"
+        )
+        fig_top.update_layout(height=280, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig_top, use_container_width=True)
+
+    with col_g2:
+        st.markdown("#### 📊 AVANÇADA")
+        d1 = sum(1 for n in amostra_200 if 1 <= n <= 12) / len(amostra_200) * 100
+        d2 = sum(1 for n in amostra_200 if 13 <= n <= 24) / len(amostra_200) * 100
+        d3 = sum(1 for n in amostra_200 if 25 <= n <= 36) / len(amostra_200) * 100
+        
+        fig_duz = px.bar(
+            x=["1ª Dúzia", "2ª Dúzia", "3ª Dúzia"],
+            y=[d1, d2, d3],
+            labels={'x': 'Grupo', 'y': 'Porcentagem (%)'},
+            title="Distribuição Dúzias (%)"
+        )
+        fig_duz.update_layout(height=280, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig_duz, use_container_width=True)
+
+    with col_g3:
+        st.markdown("#### 🗓️ MAPA DE CALOR DA MESA (0 a 36)")
+        matriz_mesa = [
+            [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
+            [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+            [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
+        ]
+        matriz_freq = [[amostra_200.count(num) for num in lin] for lin in matriz_mesa]
+        
+        fig_heat = px.imshow(
+            matriz_freq,
+            x=[str(x) for x in matriz_mesa[0]],
+            y=["3ª Col", "2ª Col", "1ª Col"],
+            color_continuous_scale="Reds",
+            title="Intensidade Frequência Mesa"
+        )
+        fig_heat.update_layout(height=280, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig_heat, use_container_width=True)
+
+    st.markdown("---")
+
+    # 3. TABELA ANALÍTICA DETALHADA COM SCORE PONDERADO
     st.subheader(f"📊 Mapeamento Analítico com Níveis de Pontuação - {roleta_selecionada}")
 
     dados_tabela = []
@@ -429,15 +486,12 @@ if st.session_state.historico:
             "Racetrack": res["racetrack"],
             "Inversão": res["inversao"],
             "Reincidência": res["reincidencia"],
-            
-            # NOVAS COLUNAS DA SUA IMAGEM:
             "Vizinho (+1,0)": f"+{pts.get('vizinho', 0.0)}" if pts.get('vizinho', 0.0) > 0 else "-",
             "+Quent 100R (+1,0)": f"+{pts.get('quente_100r', 0.0)}" if pts.get('quente_100r', 0.0) > 0 else "-",
             "+2F (+2,0)": f"+{pts.get('dois_filtros', 0.0)}" if pts.get('dois_filtros', 0.0) > 0 else "-",
             "Px top1 (+2,5)": f"+{pts.get('px_top1', 0.0)}" if pts.get('px_top1', 0.0) > 0 else "-",
             "Ausente (+3,0)": f"+{pts.get('ausente', 0.0)}" if pts.get('ausente', 0.0) > 0 else "-",
             "SCORE 🔥": sc_max,
-            
             "Confirmações": res["confirmacoes"],
             "Score Base": res["score_base"],
             "Status / Sugestão": status_txt
@@ -446,4 +500,4 @@ if st.session_state.historico:
     df_exibicao = pd.DataFrame(dados_tabela)
     st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
 else:
-    st.info("Aguardando inserção de dados para gerar a tabela analítica...")
+    st.info("Aguardando captura de dados...")
