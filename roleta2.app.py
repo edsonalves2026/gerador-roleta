@@ -144,11 +144,14 @@ def buscar_dados_roleta_url(roleta_nome):
     if not url:
         return []
     try:
+        session = requests.Session()
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "application/json"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Origin": "https://www.tipminer.com",
+            "Referer": "https://www.tipminer.com/"
         }
-        resp = requests.get(url, headers=headers, timeout=8)
+        resp = session.get(url, headers=headers, timeout=6)
         
         if resp.status_code == 200:
             dados = resp.json()
@@ -159,18 +162,15 @@ def buscar_dados_roleta_url(roleta_nome):
             if isinstance(dados, list):
                 for item in dados:
                     if isinstance(item, dict):
-                        val = item.get("result", item.get("number"))
+                        val = item.get("result", item.get("number", item.get("value")))
                         if val is not None and isinstance(val, (int, float)):
                             numeros.append(int(val))
                     elif isinstance(item, (int, float)):
                         numeros.append(int(item))
-            
             return numeros[:200]
         else:
-            st.sidebar.error(f"Erro HTTP ({resp.status_code})")
             return []
-    except Exception as e:
-        st.sidebar.error(f"Falha na captura: {e}")
+    except Exception:
         return []
 
 # ==========================================
@@ -287,7 +287,6 @@ def classificar_padroes_200_rodadas(historico_completo):
     ).reset_index()
     
     estudo["Taxa de Acerto (%)"] = round((estudo["Acertos"] / estudo["Total"]) * 100, 1)
-    
     estudo_filtrado = estudo[estudo["Taxa de Acerto (%)"] >= 50.0]
     
     estudo_ordenado = estudo_filtrado.sort_values(
@@ -548,17 +547,16 @@ def processar_novo_numero(num_novo):
 
 # Execução do Modo de Operação
 if modo_operacao == "On-line (Captura Automática)":
-    st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
+    if novos_dados:
+        st.sidebar.success(f"🟢 Conectado: **{roleta_selecionada}**")
+        if novos_dados != st.session_state.historico:
+            num_novo = novos_dados[0]
+            processar_novo_numero(num_novo)
+            st.session_state.historico = novos_dados
+    else:
+        st.sidebar.warning(f"🟡 Tentando reconectar à **{roleta_selecionada}**...")
 
-    if novos_dados and novos_dados != st.session_state.historico:
-        num_novo = novos_dados[0]
-        processar_novo_numero(num_novo)
-        st.session_state.historico = novos_dados
-
-    time.sleep(5)
-    st.rerun()
-    
 else:
     st.sidebar.warning(f"🟠 Modo Manual ativo: **{roleta_selecionada}**")
     
@@ -598,6 +596,8 @@ if st.session_state.historico:
     for i, num in enumerate(esteira):
         with cols[i]:
             st.metric(label=f"Pos {i+1:02d}", value=num)
+else:
+    st.info("Aguardando captura do primeiro sorteio na mesa...")
 
 # ALERTA EXCLUSIVO BRK
 if st.session_state.historico and len(st.session_state.historico) >= 2:
@@ -703,7 +703,7 @@ if st.session_state.historico:
             df_rank_exib.index = range(1, len(df_rank_exib) + 1)
             st.dataframe(df_rank_exib, use_container_width=True)
         else:
-            st.info("Nenhum padrão com no mínimo 50% de acerto foi consolidado ainda (mínimo ~20 sinais).")
+            st.info("Nenhum padrão com no mínimo 50% de acerto foi consolidado ainda.")
 
     # Alerta Manual
     historico_analise = list(reversed(st.session_state.historico))
@@ -731,8 +731,6 @@ if st.session_state.historico:
                 st.success(msg)
             else:
                 st.error(msg)
-else:
-    st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # ==========================================
 # 9. ESTATÍSTICAS E PAINEL VISUAL
@@ -762,8 +760,8 @@ if st.session_state.historico:
         quentes = contagem.head(5).index.tolist()
         frios = contagem.tail(5).index.tolist()
         
-        st.write(f"🔥 **Mais Frequentes (Quentes):** {quentes}")
-        st.write(f"🧊 **Menos Frequentes (Frios):** {frios}")
+        st.write(f"🔥 **Mais Frequentes:** {quentes}")
+        st.write(f"🧊 **Menos Frequentes:** {frios}")
         
         freq_df = pd.DataFrame({'Número': contagem.index.astype(str), 'Frequência': contagem.values})
         fig_freq = px.bar(freq_df.head(10), x='Número', y='Frequência', title="Top 10 Números na Amostra", color='Frequência')
@@ -806,21 +804,17 @@ if st.session_state.historico:
         st.markdown(f"### 📊 ÚLTIMAS {qtd_rodadas}")
         
         matriz_freq = {n: amostra.count(n) for n in range(0, 37)}
-        
-        st.write("🔥 **Mapa de Calor da Mesa (0 a 36):**")
-        
         grid_rows = [
             [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
             [0, 2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
             [0, 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
         ]
-        
         text_vals = [[f"{n}<br>({matriz_freq[n]})" for n in row] for row in grid_rows]
         
         custom_colorscale = [
-            [0.0, "#FFFFFF"],   # Branco para o Zero (0)
-            [0.5, "#1E1E1E"],   # Preto / Cinza Escuro
-            [1.0, "#D32F2F"]    # Vermelho
+            [0.0, "#FFFFFF"],
+            [0.5, "#1E1E1E"],
+            [1.0, "#D32F2F"]
         ]
 
         def calcular_valor_cor(n):
@@ -851,3 +845,8 @@ if st.session_state.historico:
             yaxis=dict(showticklabels=False)
         )
         st.plotly_chart(fig_grid, use_container_width=True)
+
+# Loop de Recarregamento para Modo On-line
+if modo_operacao == "On-line (Captura Automática)":
+    time.sleep(5)
+    st.rerun()
