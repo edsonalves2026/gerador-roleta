@@ -134,19 +134,32 @@ def checar_estrategia_fantasma(sub_historico):
         if len(set(duzias)) == 1:
             return {"status": "ATIVADO", "principais": ultimos_5[-2:]}
     return {"status": "INATIVO"}
-
+    
+# SUBSTINUA PELA VERSÃO ATUALIZADA:
 def buscar_dados_roleta_url(roleta_nome):
     url = URLS_ROLETAS.get(roleta_nome)
     if not url:
         return []
     try:
-        resp = requests.get(url, timeout=5)
+        # User-Agent para evitar bloqueios de requisição por bot
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        resp = requests.get(url, headers=headers, timeout=8)
+        
         if resp.status_code == 200:
             dados = resp.json()
-            return [item["number"] for item in dados[:200]]
-    except Exception:
-        pass
-    return []
+            
+            # Trata respostas que envelopam a lista em chaves como "data" ou "results"
+            if isinstance(dados, dict):
+                dados = dados.get("data", dados.get("results", []))
+            
+            # Extrai os números com segurança
+            return [item["number"] for item in dados if isinstance(item, dict) and "number" in item][:200]
+        else:
+            st.sidebar.error(f"Erro API ({resp.status_code}): Servidor recusou a conexão.")
+            return []
+    except Exception as e:
+        st.sidebar.error(f"Falha de Conexão: {e}")
+        return []
 
 # ==========================================
 # 3. NOTIFICAÇÕES TELEGRAM
