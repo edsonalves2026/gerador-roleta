@@ -202,9 +202,9 @@ def enviar_alerta_telegram(ultimo, score, alvos, padroes, roleta_nome="Desconhec
     
     return enviar_mensagem_telegram(msg)
 
-def enviar_resultado_telegram(tipo, numero, etapa=""):
+def enviar_resultado_telegram(tipo, numero, etapa="", roleta_nome="Desconhecida"):
     emoji = "✅" if tipo == "GREEN" else "❌"
-    msg = f"{emoji} *RESULTADO: {tipo}* {f'({etapa})' if etapa else ''}\n🎲 Número Sorteado: `{numero}`"
+    msg = f"{emoji} *RESULTADO: {tipo}* {f'({etapa})' if etapa else ''}\n🎰 Roleta: `{roleta_nome}`\n🎲 Número Sorteado: `{numero}`"
     return enviar_mensagem_telegram(msg)
 
 # ==========================================
@@ -473,14 +473,14 @@ def processar_novo_numero(num_novo):
         alvos_com_zero = set(st.session_state.alvos_sinal + [0])
         if num_novo in alvos_com_zero:
             st.session_state.ultimo_resultado = f"GREEN ✅ ({etapa_nome})"
-            enviar_resultado_telegram("GREEN", num_novo, etapa_nome)
+            enviar_resultado_telegram("GREEN", num_novo, etapa_nome, roleta_nome=roleta_selecionada)
             st.session_state.sinal_ativo = False
             st.session_state.tentativa_atual = 0
             st.session_state.alvos_sinal = []
             return
         elif st.session_state.tentativa_atual >= 3:
             st.session_state.ultimo_resultado = "LOSS / RED ❌"
-            enviar_resultado_telegram("LOSS", num_novo)
+            enviar_resultado_telegram("LOSS", num_novo, roleta_nome=roleta_selecionada)
             st.session_state.sinal_ativo = False
             st.session_state.tentativa_atual = 0
             st.session_state.alvos_sinal = []
@@ -530,6 +530,7 @@ def processar_novo_numero(num_novo):
                         st.session_state.alvos_sinal.extend(alvos_novos)
                         enviar_mensagem_telegram(
                             f"🔄 *FUSÃO DE ALVOS (GALE)*\n"
+                            f"🎰 Roleta: `{roleta_selecionada}`\n"
                             f"Novos alvos adicionados: `{alvos_novos}`\n"
                             f"Alvos Totais: `{st.session_state.alvos_sinal}`"
                         )
@@ -542,6 +543,7 @@ def processar_novo_numero(num_novo):
                     res_ultimo["score_num"],
                     res_ultimo["alvos"],
                     [f"Padrão: {padrao}", f"Filtro: {filtro_hibrido_opcao}"],
+                    roleta_nome=roleta_selecionada,
                     tier_nome=tier_do_padrao,
                     posicao_rank=posicao_rank,
                     taxa_acerto=taxa_acerto
@@ -726,6 +728,7 @@ if st.session_state.historico:
                 res_ultimo["score_num"],
                 res_ultimo["alvos"],
                 [res_ultimo["status"]],
+                roleta_nome=roleta_selecionada,
                 posicao_rank=posicao_rank,
                 taxa_acerto=taxa_acerto
             )
@@ -739,10 +742,10 @@ if st.session_state.historico:
 # ==========================================
 if st.session_state.historico:
     st.markdown("---")
-    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 1000)")
+    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 200)")
     
     total_disponivel = len(st.session_state.historico)
-    max_amostra = min(1000, total_disponivel)
+    max_amostra = min(200, total_disponivel)
     qtd_rodadas = st.slider(
         "Selecione o tamanho da amostra (Últimas X rodadas):",
         min_value=min(10, total_disponivel),
