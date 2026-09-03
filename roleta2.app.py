@@ -792,20 +792,27 @@ if st.session_state.historico:
         
         ativacoes_num = res_tiro_certo["ativacoes"].get(num, set())
         
+        # Mapeamento e identificação dos números/dezenas gerados por cada filtro
+        dezenas_vizinhos = vizinhos_fisi_dict.get(num, [])
+        puxs_lista = puxadores_dict.get(num, [])
+        px_top1 = [puxs_lista[0]] if len(puxs_lista) > 0 else []
+        dezenas_ausentes = dados_brk_in["ausentes"] if num in dados_brk_in["ausentes"] else []
+
         sugestao = res_tiro_certo["status_nome"]
         if res_tiro_certo["alvos_headshot"]:
             sugestao += f": {res_tiro_certo['alvos_headshot']}"
         elif res_tiro_certo["alvos_tiro_certo"]:
             sugestao += f": {res_tiro_certo['alvos_tiro_certo']}"
 
+        # Formatação das colunas exibindo o LED + Dezenas selecionadas
         dados_tabela.append({
             "Último": res["ultimo"],
-            "Vizinho (+1.0)": "🟢" if "Vizinho" in ativacoes_num else "⚪",
-            "+Quente 100R (+1.0)": "🟢" if "+Quente 100R" in ativacoes_num else "⚪",
-            "2F (+2.0)": "🟢" if "+2F" in ativacoes_num else "⚪",
-            "Px top 1 (+2.5)": "🟢" if "Px top1" in ativacoes_num else "⚪",
-            "Ausente (+3.0)": "🟢" if "Ausente" in ativacoes_num else "⚪",
-            "Ult 13 (+1.0)": "🟢" if "Ult 13" in ativacoes_num else "⚪",
+            "Vizinho (+1.0)": f"🟢 {dezenas_vizinhos}" if "Vizinho" in ativacoes_num else "⚪",
+            "+Quente 100R (+1.0)": f"🟢 ({num})" if "+Quente 100R" in ativacoes_num else "⚪",
+            "2F (+2.0)": f"🟢 ({num})" if "+2F" in ativacoes_num else "⚪",
+            "Px top 1 (+2.5)": f"🟢 {px_top1}" if "Px top1" in ativacoes_num else "⚪",
+            "Ausente (+3.0)": f"🟢 ({num})" if "Ausente" in ativacoes_num else "⚪",
+            "Ult 13 (+1.0)": f"🟢 ({num})" if "Ult 13" in ativacoes_num else "⚪",
             "Score 🔥": f"{res_tiro_certo['detalhes_pesos'].get(num, 0.0):.1f}",
             "Status / Sugestão": sugestao if idx == 0 else res["status"]
         })
