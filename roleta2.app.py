@@ -1,15 +1,16 @@
 # ==========================================
 # IMPORTS E CONFIGURAÇÕES INICIAIS
 # ==========================================
+import time
 import requests
 import pandas as pd
 import numpy as np
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
-import streamlit as st
-import requests
-import time  # <--- Adicione aqui
+
+# A primeira instrução executável do Streamlit DEVE ser set_page_config
+st.set_page_config(page_title="Radar de Roleta Pro", layout="wide")
 
 # ==========================================
 # 1. MATRIZ DE POSICIONAMENTO E CONSTANTES
@@ -95,7 +96,7 @@ def obter_puxadores_otimizados(ultimo, sub_historico):
         if ocorrencias:
             mais_frequente = pd.Series(ocorrencias).mode()
             if not mais_frequente.empty:
-                num_freq = mais_frequente.iloc[0]
+                num_freq = int(mais_frequente.iloc[0])
                 if num_freq not in base_puxadores:
                     return [num_freq] + base_puxadores[:1]
     return base_puxadores
@@ -151,8 +152,6 @@ def buscar_dados_roleta_url(roleta_nome):
         
         if resp.status_code == 200:
             dados = resp.json()
-            
-            # Se vier envelopado em dicionário
             if isinstance(dados, dict):
                 dados = dados.get("result", dados.get("data", dados.get("results", [])))
             
@@ -160,7 +159,6 @@ def buscar_dados_roleta_url(roleta_nome):
             if isinstance(dados, list):
                 for item in dados:
                     if isinstance(item, dict):
-                        # Pega o valor da chave 'result' (ou 'number')
                         val = item.get("result", item.get("number"))
                         if val is not None and isinstance(val, (int, float)):
                             numeros.append(int(val))
@@ -216,36 +214,30 @@ def processar_tiro_certo_e_headshot(esteira_14, historico_200, dados_brk_in, pux
     
     for num in esteira_14:
         peso = 0.0
-        # 1. Vizinhos
         if any(v in esteira_14 for v in vizinhos_fisi_dict.get(num, [])):
             ativacoes[num].add("Vizinho")
             peso += 1.0
-        # 2. Quentes
         if num in quentes_100:
             ativacoes[num].add("+Quente 100R")
             peso += 1.0
-        # 3. Segunda Forma (2F)
         if esteira_14.count(num) >= 2:
             ativacoes[num].add("+2F")
             peso += 2.0
-        # 4. Puxador Top 1
         pxs = puxadores_dict.get(num, [])
         if pxs and pxs[0] in esteira_14:
             ativacoes[num].add("Px top1")
             peso += 2.5
-        # 5. Ausente BRK
         if num in dados_brk_in.get("ausentes", []):
             ativacoes[num].add("Ausente")
             peso += 3.0
-        # 6. Presença nas últimas 13 rodadas
         if num in esteira_14[1:14]:
             ativacoes[num].add("Ult 13")
             peso += 1.0
             
         detalhes_pesos[num] = peso
 
-    alvos_tiro_certo = [num for num, p in detalhes_pesos.items() if p >= 4.0]
-    alvos_headshot = [num for num, p in detalhes_pesos.items() if p >= 6.5]
+    alvos_tiro_certo = [int(num) for num, p in detalhes_pesos.items() if p >= 4.0]
+    alvos_headshot = [int(num) for num, p in detalhes_pesos.items() if p >= 6.5]
 
     status_nome = "AGUARDAR"
     if alvos_headshot:
@@ -296,7 +288,6 @@ def classificar_padroes_200_rodadas(historico_completo):
     
     estudo["Taxa de Acerto (%)"] = round((estudo["Acertos"] / estudo["Total"]) * 100, 1)
     
-    # REGRA DE CORREÇÃO: Aplicação estrita do filtro de no mínimo 50% de assertividade
     estudo_filtrado = estudo[estudo["Taxa de Acerto (%)"] >= 50.0]
     
     estudo_ordenado = estudo_filtrado.sort_values(
@@ -394,16 +385,16 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     score_final = min(score, 5)
     
     if res_brk["sinal_ativo"]:
-        alvos_ausentes = [n for n in res_brk["prioridade_maxima"] if n in alvos]
-        outros_alvos = [n for n in sorted(list(alvos)) if n not in alvos_ausentes]
+        alvos_ausentes = [int(n) for n in res_brk["prioridade_maxima"] if n in alvos]
+        outros_alvos = [int(n) for n in sorted(list(alvos)) if n not in alvos_ausentes]
         alvos_ordenados = alvos_ausentes + outros_alvos
     else:
-        alvos_ordenados = sorted(list(alvos))
+        alvos_ordenados = [int(n) for n in sorted(list(alvos))]
 
     padrao_nome = " + ".join(filtros_ativos) if filtros_ativos else "Geral"
 
     return {
-        "ultimo": ultimo,
+        "ultimo": int(ultimo),
         "esquerda": f"{vizinhos['esq_2']} | {vizinhos['esq_1']}",
         "direita": f"{vizinhos['dir_1']} | {vizinhos['dir_2']}",
         "puxadores": str(puxadores[:2]),
@@ -422,17 +413,19 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     }
 
 # ==========================================
-# 7. INTERFACE STREAMLIT
+# 7. INTERFACE STREAMLIT - ESTADO INICIAL
 # ==========================================
-st.set_page_config(page_title="Radar de Roleta Pro", layout="wide")
 st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
 if "historico" not in st.session_state:
     st.session_state.historico = []
 if "sinal_ativo" not in st.session_state:
     st.session_state.sinal_ativo = False
+if "alvos_sinal" not in st.session_state:
     st.session_state.alvos_sinal = []
+if "tentativa_atual" not in st.session_state:
     st.session_state.tentativa_atual = 0
+if "ultimo_resultado" not in st.session_state:
     st.session_state.ultimo_resultado = None
 
 # Painel Lateral
@@ -467,6 +460,9 @@ modo_gale_opcao = st.sidebar.radio(
 )
 st.sidebar.markdown("---")
 
+# ==========================================
+# PROCESSAMENTO DE NOVO NÚMERO
+# ==========================================
 def processar_novo_numero(num_novo):
     if st.session_state.sinal_ativo:
         st.session_state.tentativa_atual += 1
@@ -550,19 +546,18 @@ def processar_novo_numero(num_novo):
                     taxa_acerto=taxa_acerto
                 )
 
-# Modo Online / Manual
+# Execução do Modo de Operação
 if modo_operacao == "On-line (Captura Automática)":
-        st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
-        novos_dados = buscar_dados_roleta_url(roleta_selecionada)
+    st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
+    novos_dados = buscar_dados_roleta_url(roleta_selecionada)
 
-        if novos_dados and novos_dados != st.session_state.historico:
-            num_novo = novos_dados[0]
-            processar_novo_numero(num_novo)
-            st.session_state.historico = novos_dados
+    if novos_dados and novos_dados != st.session_state.historico:
+        num_novo = novos_dados[0]
+        processar_novo_numero(num_novo)
+        st.session_state.historico = novos_dados
 
-        # Auto-refresh a cada 5 segundos no modo On-line
-        time.sleep(5)
-        st.rerun()
+    time.sleep(5)
+    st.rerun()
     
 else:
     st.sidebar.warning(f"🟠 Modo Manual ativo: **{roleta_selecionada}**")
@@ -674,7 +669,6 @@ if st.session_state.historico:
         px_top1 = [puxs_lista[0]] if len(puxs_lista) > 0 else []
         dezenas_ausentes = dados_brk_in["ausentes"] if num in dados_brk_in["ausentes"] else []
         
-# Formatação limpa para evitar vazamento de np.int64
         sugestao = res_tiro_certo["status_nome"]
         if res_tiro_certo["alvos_headshot"]:
             alvos_limpos = [int(x) for x in res_tiro_certo["alvos_headshot"]]
@@ -697,7 +691,6 @@ if st.session_state.historico:
     
     st.subheader(f"📊 Mapeamento Analítico - {roleta_selecionada}")
     
-    # REGRA DE CORREÇÃO: Índice visual da tabela iniciando estritamente em 1
     df_exibicao = pd.DataFrame(dados_tabela)
     df_exibicao.index = range(1, len(df_exibicao) + 1)
     st.dataframe(df_exibicao, use_container_width=True)
@@ -707,7 +700,6 @@ if st.session_state.historico:
     with st.expander("🏆 Ranking dos Padrões (Assertividade ≥ 50% - Últimas 200 Rodadas)", expanded=False):
         if not df_rank.empty:
             df_rank_exib = df_rank.copy()
-            # REGRA DE CORREÇÃO: Índice do ranking iniciando em 1
             df_rank_exib.index = range(1, len(df_rank_exib) + 1)
             st.dataframe(df_rank_exib, use_container_width=True)
         else:
