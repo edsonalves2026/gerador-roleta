@@ -187,17 +187,19 @@ def enviar_mensagem_telegram(texto):
     except Exception as e:
         return False, str(e)
 
-def enviar_alerta_telegram(ultimo, score, alvos, padroes, tier_nome="Indefinido", posicao_rank=None, taxa_acerto=None):
+def enviar_alerta_telegram(ultimo, score, alvos, padroes, roleta_nome="Desconhecida", tier_nome="Indefinido", posicao_rank=None, taxa_acerto=None):
     pos_str = f"#{posicao_rank}" if posicao_rank else "N/A"
     taxa_str = f"{taxa_acerto}%" if taxa_acerto is not None else "N/A"
     msg = (
         f"🚨 *ALERTA DE SINAL DETECTADO* 🚨\n\n"
-        f"🎰 *Último Número:* `{ultimo}`\n"
+        f"🎰 *Roleta:* `{roleta_nome}`\n"
+        f"🎲 *Último Número:* `{ultimo}`\n"
         f"🔥 *Score do Sinal:* `{score}/5`\n"
         f"🏆 *Tier:* `{tier_nome}` (Rank: {pos_str} | Assertividade: {taxa_str})\n"
         f"🎯 *Alvos Sugeridos:* `{alvos}`\n"
         f"📋 *Padrões Identificados:* {', '.join(padroes)}"
     )
+    
     return enviar_mensagem_telegram(msg)
 
 def enviar_resultado_telegram(tipo, numero, etapa=""):
