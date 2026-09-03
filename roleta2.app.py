@@ -44,10 +44,10 @@ GRUPO_OCULTO_BRK = {
 }
 
 URLS_ROLETAS = {
-    "Brazilian Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/COLOQUE_O_HASH_DA_BRAZILIAN/history?limit=200",
-    "VIP Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/COLOQUE_O_HASH_DA_VIP/history?limit=200",
-    "Immersive Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-13703302d5cc/history?limit=200",
-    "Auto-Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/COLOQUE_O_HASH_DA_AUTO/history?limit=200"
+    "XXXtreme Lightning": "https://api.core.public.tipminer.com/v1/roulette/rounds/e640b7c7-aaba-4ffa-a678-6b6872898162/history?limit=200",
+    "Roleta Brasileira": "https://api.core.public.tipminer.com/v1/roulette/rounds/45d12dd3-8f85-4ab2-8c86-4eaea7967e10/history?limit=200",
+    "Immersive Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-f3703302d5cc/history?limit=200",
+    "Swedish Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-40d2-b479-a28a01c6ee13/history?limit=200"
 }
 
 TELEGRAM_BOT_TOKEN = "SEU_BOT_TOKEN_HERE"
@@ -149,40 +149,27 @@ def buscar_dados_roleta_url(roleta_nome):
         if resp.status_code == 200:
             dados = resp.json()
             
-            # Se for dicionário, extrai a lista de rodadas
+            # Se vier envelopado em dicionário
             if isinstance(dados, dict):
                 dados = dados.get("result", dados.get("data", dados.get("results", [])))
-                if isinstance(dados, dict):
-                    dados = dados.get("rounds", dados.get("history", []))
             
             numeros = []
-            if isinstance(dados, list) and len(dados) > 0:
-                # Exibe na barra lateral o primeiro item para inspecionar os nomes das chaves
-                st.sidebar.write("Estrutura do item:", dados[0])
-                
+            if isinstance(dados, list):
                 for item in dados:
                     if isinstance(item, dict):
-                        # Varre as chaves mais comuns de resultados de roleta
-                        for chave in ["number", "outcome", "result", "value", "n"]:
-                            if chave in item and item[chave] is not None:
-                                try:
-                                    numeros.append(int(item[chave]))
-                                    break
-                                except ValueError:
-                                    pass
+                        # Pega o valor da chave 'result' (ou 'number')
+                        val = item.get("result", item.get("number"))
+                        if val is not None and isinstance(val, (int, float)):
+                            numeros.append(int(val))
                     elif isinstance(item, (int, float)):
                         numeros.append(int(item))
             
-            if numeros:
-                return numeros[:200]
-            
-            st.sidebar.warning("⚠️ API conectou, mas nenhum número foi extraído.")
-            return []
+            return numeros[:200]
         else:
             st.sidebar.error(f"Erro HTTP ({resp.status_code})")
             return []
     except Exception as e:
-        st.sidebar.error(f"Erro na conexão: {e}")
+        st.sidebar.error(f"Falha na captura: {e}")
         return []
 
 # ==========================================
