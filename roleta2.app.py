@@ -149,28 +149,34 @@ def buscar_dados_roleta_url(roleta_nome):
         if resp.status_code == 200:
             dados = resp.json()
             
-            # Trata estrutura tipminer: {"result": {"rounds": [...]}} ou {"data": [...]}
+            # Se for dicionário, extrai a lista de rodadas
             if isinstance(dados, dict):
-                if "result" in dados and isinstance(dados["result"], dict):
-                    dados = dados["result"].get("rounds", [])
-                else:
-                    dados = dados.get("data", dados.get("results", []))
+                dados = dados.get("result", dados.get("data", dados.get("results", [])))
+                if isinstance(dados, dict):
+                    dados = dados.get("rounds", dados.get("history", []))
             
             numeros = []
-            if isinstance(dados, list):
+            if isinstance(dados, list) and len(dados) > 0:
+                # Exibe na barra lateral o primeiro item para inspecionar os nomes das chaves
+                st.sidebar.write("Estrutura do item:", dados[0])
+                
                 for item in dados:
                     if isinstance(item, dict):
-                        # Pega a chave 'number' ou 'value' ou 'outcome'
-                        val = item.get("number", item.get("value", item.get("outcome")))
-                        if val is not None and isinstance(val, (int, float)):
-                            numeros.append(int(val))
+                        # Varre as chaves mais comuns de resultados de roleta
+                        for chave in ["number", "outcome", "result", "value", "n"]:
+                            if chave in item and item[chave] is not None:
+                                try:
+                                    numeros.append(int(item[chave]))
+                                    break
+                                except ValueError:
+                                    pass
                     elif isinstance(item, (int, float)):
                         numeros.append(int(item))
             
             if numeros:
                 return numeros[:200]
             
-            st.sidebar.warning("⚠️ API conectou, mas o formato dos números é novo.")
+            st.sidebar.warning("⚠️ API conectou, mas nenhum número foi extraído.")
             return []
         else:
             st.sidebar.error(f"Erro HTTP ({resp.status_code})")
