@@ -12,6 +12,9 @@ import plotly.graph_objects as go
 # A primeira instrução executável do Streamlit DEVE ser set_page_config
 st.set_page_config(page_title="Radar de Roleta Pro", layout="wide")
 
+TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "")
+
 # ==========================================
 # 1. MATRIZ DE POSICIONAMENTO E CONSTANTES
 # ==========================================
@@ -53,9 +56,6 @@ URLS_ROLETAS = {
     "Immersive Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-f3703302d5cc/history?limit=200",
     "Swedish Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-40d2-b479-a28a01c6ee13/history?limit=200"
 }
-
-TELEGRAM_BOT_TOKEN = "SEU_BOT_TOKEN_HERE"
-TELEGRAM_CHAT_ID = "SEU_CHAT_ID_HERE"
 
 # ==========================================
 # 2. FUNÇÕES AUXILIARES E INTEGRAÇÃO API
