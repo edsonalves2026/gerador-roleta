@@ -135,30 +135,40 @@ def checar_estrategia_fantasma(sub_historico):
             return {"status": "ATIVADO", "principais": ultimos_5[-2:]}
     return {"status": "INATIVO"}
     
-# SUBSTINUA PELA VERSÃO ATUALIZADA:
+# SUBSTITUA A FUNÇÃO POR ESTA VERSÃO TRATADA:
 def buscar_dados_roleta_url(roleta_nome):
     url = URLS_ROLETAS.get(roleta_nome)
     if not url:
         return []
     try:
-        # User-Agent para evitar bloqueios de requisição por bot
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        resp = requests.get(url, headers=headers, timeout=8)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json"
+        }
+        resp = requests.get(url, headers=headers, timeout=5)
         
         if resp.status_code == 200:
             dados = resp.json()
             
-            # Trata respostas que envelopam a lista em chaves como "data" ou "results"
+            # Se for um dicionário, busca a lista dentro de chaves comuns de APIs
             if isinstance(dados, dict):
-                dados = dados.get("data", dados.get("results", []))
+                dados = dados.get("data", dados.get("results", dados.get("history", [])))
             
-            # Extrai os números com segurança
-            return [item["number"] for item in dados if isinstance(item, dict) and "number" in item][:200]
+            # Se for uma lista direta de inteiros [32, 15, 19, ...]
+            if isinstance(dados, list) and len(dados) > 0 and isinstance(dados[0], int):
+                return dados[:200]
+                
+            # Se for uma lista de objetos [{"number": 32}, ...]
+            if isinstance(dados, list):
+                return [item["number"] for item in dados if isinstance(item, dict) and "number" in item][:200]
+                
+            st.sidebar.warning("API respondeu, mas o formato dos dados é incompatível.")
+            return []
         else:
-            st.sidebar.error(f"Erro API ({resp.status_code}): Servidor recusou a conexão.")
+            st.sidebar.error(f"Servidor Indisponível (HTTP {resp.status_code}). Use o modo manual.")
             return []
     except Exception as e:
-        st.sidebar.error(f"Falha de Conexão: {e}")
+        st.sidebar.error("⚠️ Domínio indisponível na nuvem. Alterne para 'Off-line (Digitação Manual)'.")
         return []
 
 # ==========================================
