@@ -135,40 +135,48 @@ def checar_estrategia_fantasma(sub_historico):
             return {"status": "ATIVADO", "principais": ultimos_5[-2:]}
     return {"status": "INATIVO"}
     
-# SUBSTITUA A FUNÇÃO POR ESTA VERSÃO TRATADA:
 def buscar_dados_roleta_url(roleta_nome):
     url = URLS_ROLETAS.get(roleta_nome)
     if not url:
         return []
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "application/json"
         }
-        resp = requests.get(url, headers=headers, timeout=5)
+        resp = requests.get(url, headers=headers, timeout=8)
         
         if resp.status_code == 200:
             dados = resp.json()
             
-            # Se for um dicionário, busca a lista dentro de chaves comuns de APIs
+            # Trata estrutura tipminer: {"result": {"rounds": [...]}} ou {"data": [...]}
             if isinstance(dados, dict):
-                dados = dados.get("data", dados.get("results", dados.get("history", [])))
+                if "result" in dados and isinstance(dados["result"], dict):
+                    dados = dados["result"].get("rounds", [])
+                else:
+                    dados = dados.get("data", dados.get("results", []))
             
-            # Se for uma lista direta de inteiros [32, 15, 19, ...]
-            if isinstance(dados, list) and len(dados) > 0 and isinstance(dados[0], int):
-                return dados[:200]
-                
-            # Se for uma lista de objetos [{"number": 32}, ...]
+            numeros = []
             if isinstance(dados, list):
-                return [item["number"] for item in dados if isinstance(item, dict) and "number" in item][:200]
-                
-            st.sidebar.warning("API respondeu, mas o formato dos dados é incompatível.")
+                for item in dados:
+                    if isinstance(item, dict):
+                        # Pega a chave 'number' ou 'value' ou 'outcome'
+                        val = item.get("number", item.get("value", item.get("outcome")))
+                        if val is not None and isinstance(val, (int, float)):
+                            numeros.append(int(val))
+                    elif isinstance(item, (int, float)):
+                        numeros.append(int(item))
+            
+            if numeros:
+                return numeros[:200]
+            
+            st.sidebar.warning("⚠️ API conectou, mas o formato dos números é novo.")
             return []
         else:
-            st.sidebar.error(f"Servidor Indisponível (HTTP {resp.status_code}). Use o modo manual.")
+            st.sidebar.error(f"Erro HTTP ({resp.status_code})")
             return []
     except Exception as e:
-        st.sidebar.error("⚠️ Domínio indisponível na nuvem. Alterne para 'Off-line (Digitação Manual)'.")
+        st.sidebar.error(f"Erro na conexão: {e}")
         return []
 
 # ==========================================
