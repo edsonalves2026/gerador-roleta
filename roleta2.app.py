@@ -799,7 +799,6 @@ if st.session_state.historico:
             sugestao += f": {res_tiro_certo['alvos_tiro_certo']}"
 
         dados_tabela.append({
-            "Posição": f"Pos {idx+1:02d}",
             "Último": res["ultimo"],
             "Vizinho (+1.0)": "🟢" if "Vizinho" in ativacoes_num else "⚪",
             "+Quente 100R (+1.0)": "🟢" if "+Quente 100R" in ativacoes_num else "⚪",
@@ -812,14 +811,21 @@ if st.session_state.historico:
         })
     
     st.subheader(f"📊 Mapeamento Analítico - {roleta_selecionada}")
+    
+    # Cria o DataFrame e ajusta o índice para iniciar em 1
     df_exibicao = pd.DataFrame(dados_tabela)
-    st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
+    df_exibicao.index = range(1, len(df_exibicao) + 1)
+    
+    # Exibe a tabela sem esconder a coluna de índice nativa
+    st.dataframe(df_exibicao, use_container_width=True)
 
     # Ranking dos Tiers
     tiers_atuais, df_rank = obter_tiers_cache()
     with st.expander("🏆 Ranking dos Padrões (Últimas 200 Rodadas)", expanded=False):
         if not df_rank.empty:
-            st.dataframe(df_rank, use_container_width=True, hide_index=True)
+            df_rank_exib = df_rank.copy()
+            df_rank_exib.index = range(1, len(df_rank_exib) + 1)
+            st.dataframe(df_rank_exib, use_container_width=True)
         else:
             st.info("Aguardando histórico suficiente (mínimo ~20 sinais) para consolidação do ranking.")
 
