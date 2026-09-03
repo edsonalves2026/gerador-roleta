@@ -7,6 +7,9 @@ import numpy as np
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+import streamlit as st
+import requests
+import time  # <--- Adicione aqui
 
 # ==========================================
 # 1. MATRIZ DE POSICIONAMENTO E CONSTANTES
@@ -549,8 +552,17 @@ def processar_novo_numero(num_novo):
 
 # Modo Online / Manual
 if modo_operacao == "On-line (Captura Automática)":
-    st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
-    novos_dados = buscar_dados_roleta_url(roleta_selecionada)
+        st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
+        novos_dados = buscar_dados_roleta_url(roleta_selecionada)
+
+        if novos_dados and novos_dados != st.session_state.historico:
+            num_novo = novos_dados[0]
+            processar_novo_numero(num_novo)
+            st.session_state.historico = novos_dados
+
+        # Auto-refresh a cada 5 segundos no modo On-line
+        time.sleep(5)
+        st.rerun()
     
     if novos_dados and novos_dados != st.session_state.historico:
         num_novo = novos_dados[0]
