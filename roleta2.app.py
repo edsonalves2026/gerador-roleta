@@ -524,30 +524,33 @@ def processar_novo_numero(num_novo):
                 permitido = True
 
             if st.session_state.sinal_ativo:
-                if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
-                    alvos_novos = [n for n in res_ultimo["alvos"] if n not in st.session_state.alvos_sinal]
-                    if alvos_novos and len(st.session_state.alvos_sinal) < 10:
-                        st.session_state.alvos_sinal.extend(alvos_novos)
-                        enviar_mensagem_telegram(
-                            f"🔄 *FUSÃO DE ALVOS (GALE)*\n"
-                            f"🎰 Roleta: `{roleta_selecionada}`\n"
-                            f"Novos alvos adicionados: `{alvos_novos}`\n"
-                            f"Alvos Totais: `{st.session_state.alvos_sinal}`"
-                        )
-            elif permitido:
-                st.session_state.sinal_ativo = True
-                st.session_state.alvos_sinal = res_ultimo["alvos"]
-                st.session_state.tentativa_atual = 0
-                enviar_alerta_telegram(
-                    res_ultimo["ultimo"],
-                    res_ultimo["score_num"],
-                    res_ultimo["alvos"],
-                    [f"Padrão: {padrao}", f"Filtro: {filtro_hibrido_opcao}"],
-                    roleta_nome=roleta_selecionada,
-                    tier_nome=tier_do_padrao,
-                    posicao_rank=posicao_rank,
-                    taxa_acerto=taxa_acerto
-                )
+            if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
+                # 1. Pega apenas alvos inéditos do novo sinal
+                alvos_novos_brutos = [n for n in res_ultimo["alvos"] if n not in st.session_state.alvos_sinal]
+                
+                # 2. Se houver gatilho BRK, prioriza apenas as dezenas ausentes/Tiro Certo para não poluir
+                if res_ultimo.get("dados_brk", {}).get("sinal_ativo"):
+                    prioridades = res_ultimo["dados_brk"].get("prioridade_maxima", [])
+                    alvos_novos_filtrados = [n for n in alvos_novos_brutos if n in prioridades]
+                    if not alvos_novos_filtrados:
+                        alvos_novos_filtrados = alvos_novos_brutos[:2]
+                else:
+                    alvos_novos_filtrados = alvos_novos_brutos[:3]
+
+                # 3. Trava Rígida: Limita o TOTAL ABSOLUTO a no máximo 8 dezenas
+                limite_maximo_alvos = 8
+                vagas_disponiveis = limite_maximo_alvos - len(st.session_state.alvos_sinal)
+                
+                if vagas_disponiveis > 0 and alvos_novos_filtrados:
+                    alvos_para_adicionar = alvos_novos_filtrados[:vagas_disponiveis]
+                    st.session_state.alvos_sinal.extend(alvos_para_adicionar)
+                    
+                    enviar_mensagem_telegram(
+                        f"🔄 *FUSÃO AFUNILADA (GALE)*\n"
+                        f"🎰 Roleta: `{roleta_selecionada}`\n"
+                        f"Dezenas adicionadas: `{alvos_para_adicionar}`\n"
+                        f"🎯 Alvos Totais (Máx {limite_maximo_alvos}): `{st.session_state.alvos_sinal}`"
+                    )
 
 # Execução do Modo de Operação
 if modo_operacao == "On-line (Captura Automática)":
