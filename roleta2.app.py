@@ -564,10 +564,6 @@ if modo_operacao == "On-line (Captura Automática)":
         time.sleep(5)
         st.rerun()
     
-    if novos_dados and novos_dados != st.session_state.historico:
-        num_novo = novos_dados[0]
-        processar_novo_numero(num_novo)
-        st.session_state.historico = novos_dados
 else:
     st.sidebar.warning(f"🟠 Modo Manual ativo: **{roleta_selecionada}**")
     
