@@ -44,10 +44,10 @@ GRUPO_OCULTO_BRK = {
 }
 
 URLS_ROLETAS = {
-    "Brazilian Roulette": "https://api.tipminer.com/v1/roulette/brazilian",
-    "VIP Roulette": "https://api.tipminer.com/v1/roulette/vip",
-    "Immersive Roulette": "https://api.tipminer.com/v1/roulette/immersive",
-    "Auto-Roulette": "https://api.tipminer.com/v1/roulette/auto"
+    "Brazilian Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/COLOQUE_O_HASH_DA_BRAZILIAN/history?limit=200",
+    "VIP Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/COLOQUE_O_HASH_DA_VIP/history?limit=200",
+    "Immersive Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-13703302d5cc/history?limit=200",
+    "Auto-Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/COLOQUE_O_HASH_DA_AUTO/history?limit=200"
 }
 
 TELEGRAM_BOT_TOKEN = "SEU_BOT_TOKEN_HERE"
