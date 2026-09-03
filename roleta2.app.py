@@ -523,7 +523,7 @@ def processar_novo_numero(num_novo):
             elif filtro_hibrido_opcao == "👑 Elite (Top 3 - Máxima Precisão)" and tier_do_padrao == "👑 Elite (Top 3)":
                 permitido = True
 
-            if st.session_state.sinal_ativo:
+           if st.session_state.sinal_ativo:
             if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
                 # 1. Pega apenas alvos inéditos do novo sinal
                 alvos_novos_brutos = [n for n in res_ultimo["alvos"] if n not in st.session_state.alvos_sinal]
@@ -551,7 +551,7 @@ def processar_novo_numero(num_novo):
                         f"Dezenas adicionadas: `{alvos_para_adicionar}`\n"
                         f"🎯 Alvos Totais (Máx {limite_maximo_alvos}): `{st.session_state.alvos_sinal}`"
                     )
-
+                   
 # Execução do Modo de Operação
 if modo_operacao == "On-line (Captura Automática)":
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
