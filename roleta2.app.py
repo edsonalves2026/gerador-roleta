@@ -160,6 +160,31 @@ def enviar_mensagem_telegram(mensagem):
     except Exception as e:
         return False, f"Falha na rede: {str(e)[:60]}"
 
+def enviar_alerta_telegram(numero, score, alvos, observacoes, tier_nome="", posicao_rank=None, taxa_acerto=None):
+    detalhes = observacoes.copy()
+    if tier_nome:
+        detalhes.append(f"Tier: {tier_nome}")
+    if posicao_rank and taxa_acerto:
+        detalhes.append(f"Rank: {posicao_rank}º | Taxa: {taxa_acerto}%")
+    
+    mensagem = (
+        f"🚨 *SINAL DETECTADO* 🚨\n\n"
+        f"📌 Último Número: `{numero}`\n"
+        f"🔥 Score: `{score}`\n"
+        f"🎯 Alvos: `{alvos}`\n"
+        f"ℹ️ {'; '.join(detalhes)}\n\n"
+        f"🛡️ Proteção: `0 (Zero)`\n"
+        f"⏱️ Manter por 3 a 4 rodadas."
+    )
+    return enviar_mensagem_telegram(mensagem)
+
+def enviar_resultado_telegram(tipo, numero, etapa=""):
+    if tipo == "GREEN":
+        msg = f"✅ *GREEN CONFIRMADO!* 🎉\n\n🎯 Número Bateu: `{numero}`\n📍 Momento: `{etapa}`"
+    else:
+        msg = f"❌ *RED / LOSS* 😔\n\n📌 Último Sorteado: `{numero}`\n⚠️ Limite de Gales atingido."
+    return enviar_mensagem_telegram(msg)
+
 # ==========================================
 # 4. FUNÇÕES AUXILIARES DE CÁLCULO
 # ==========================================
@@ -240,7 +265,83 @@ def validar_gatilho_sequencial_brk(historico_200):
     }
 
 # ==========================================
-# 5. CÁLCULO DE SCORE PONDERADO
+# 5. RANKING DE PADRÕES E TIERS
+# ==========================================
+def nomear_padrao(brk, puxadores, vizinhos, invertido, fantasma, racetrack, reincidencia):
+    componentes = []
+    if brk: componentes.append("OcultosBRK")
+    if puxadores: componentes.append("Puxadores")
+    if vizinhos: componentes.append("Vizinhos")
+    if invertido: componentes.append("Inversão")
+    if fantasma: componentes.append("Fantasma")
+    if racetrack: componentes.append("Racetrack")
+    if reincidencia: componentes.append("Reincidência")
+    return " + ".join(componentes) if componentes else "Básico"
+
+def obter_tiers_cache():
+    if ("tier_cache" in st.session_state and 
+        "df_rank_cache" in st.session_state and
+        "tier_cache_tamanho" in st.session_state and
+        st.session_state.tier_cache_tamanho == len(st.session_state.historico)):
+        return st.session_state.tier_cache, st.session_state.df_rank_cache
+    
+    historico = st.session_state.historico
+    if len(historico) < 20:
+        return {}, pd.DataFrame()
+    
+    amostra = historico[:200]
+    padroes_contagem = {}
+    
+    for idx in range(4, len(amostra)):
+        sub_hist = list(reversed(amostra[idx:]))
+        if len(sub_hist) < 4:
+            continue
+        
+        ultimo = sub_hist[-1]
+        res_brk = validar_gatilho_sequencial_brk(sub_hist)
+        puxadores = bool(obter_puxadores_otimizados(ultimo, sub_hist))
+        vizinhos = True
+        invertido = obter_dezena_invertida(ultimo) is not None
+        fantasma = ultimo in GRUPO_FANTASMA
+        racetrack = len(sub_hist) >= 10
+        reincidencia = any(n in sub_hist[-3:] for n in (obter_puxadores_otimizados(ultimo, sub_hist) or []))
+        
+        nome = nomear_padrao(res_brk["sinal_ativo"], puxadores, vizinhos, invertido, fantasma, racetrack, reincidencia)
+        score = sum([res_brk["sinal_ativo"], puxadores, vizinhos, invertido, fantasma, racetrack, reincidencia])
+        
+        if nome not in padroes_contagem:
+            padroes_contagem[nome] = {"Total": 0, "Acertos": 0}
+        padroes_contagem[nome]["Total"] += 1
+        if score >= 4:
+            padroes_contagem[nome]["Acertos"] += 1
+    
+    linhas = []
+    for padrao, vals in padroes_contagem.items():
+        taxa = round((vals["Acertos"] / vals["Total"] * 100), 1) if vals["Total"] > 0 else 0
+        linhas.append({
+            "Padrão": padrao,
+            "Total": vals["Total"],
+            "Acertos": vals["Acertos"],
+            "Taxa de Acerto (%)": taxa
+        })
+    
+    df_rank = pd.DataFrame(linhas).sort_values("Taxa de Acerto (%)", ascending=False).reset_index(drop=True)
+    
+    tiers = {}
+    if not df_rank.empty:
+        tiers["ELITE_TOP_3"] = df_rank.head(3)["Padrão"].tolist()
+        tiers["SELECAO_OURO_TOP_5"] = df_rank.head(5)["Padrão"].tolist()
+        tiers["SELECAO_TOP_10"] = df_rank.head(10)["Padrão"].tolist()
+        tiers["RADAR_TOP_30"] = df_rank.head(30)["Padrão"].tolist()
+    
+    st.session_state.tier_cache = tiers
+    st.session_state.df_rank_cache = df_rank
+    st.session_state.tier_cache_tamanho = len(historico)
+    
+    return tiers, df_rank
+
+# ==========================================
+# 6. CÁLCULO DE SCORE PONDERADO
 # ==========================================
 def calcular_score_ponderado_num(num, sub_historico, res_brk, puxadores, vizinhos):
     score = 0.0
@@ -292,6 +393,9 @@ def analisar_rodada_especifica(sub_historico):
     puxadores = obter_puxadores_otimizados(ultimo, sub_historico)
     vizinhos = obter_vizinhos_mesa(ultimo)
     invertido = obter_dezena_invertida(ultimo)
+    fantasma = ultimo in GRUPO_FANTASMA
+    racetrack = len(sub_historico) >= 10
+    reincidencia = any(n in sub_historico[-3:] for n in (puxadores or []))
     
     filtros_ativos_contagem = sum([
         1 if res_brk["sinal_ativo"] else 0,
@@ -299,6 +403,11 @@ def analisar_rodada_especifica(sub_historico):
         1,
         1 if invertido is not None else 0
     ])
+    
+    padrao_nome = nomear_padrao(
+        res_brk["sinal_ativo"], bool(puxadores), True,
+        invertido is not None, fantasma, racetrack, reincidencia
+    )
     
     alvos_brutos = set()
     if res_brk["sinal_ativo"]:
@@ -318,77 +427,75 @@ def analisar_rodada_especifica(sub_historico):
     
     alvos_ordenados = sorted(scores_alvos.keys(), key=lambda x: scores_alvos[x], reverse=True)
     score_maximo = max(scores_alvos.values()) if scores_alvos else 0.0
-    top_num = alvos_ordenados[0] if alvos_ordenados else None
-    top_pontos = pontos_alvos.get(top_num, {"vizinho": 0.0, "quente_100r": 0.0, "dois_filtros": 0.0, "px_top1": 0.0, "ausente": 0.0})
     
     return {
         "ultimo": ultimo,
         "esquerda": f"{vizinhos['esq_2']} | {vizinhos['esq_1']}",
         "direita": f"{vizinhos['dir_1']} | {vizinhos['dir_2']}",
-        "puxadores": str(puxadores[:2]),
+        "puxadores": str(puxadores[:2]) if puxadores else "-",
         "vizinhos_str": f"Esq({vizinhos['esq_1']}), Dir({vizinhos['dir_1']})",
         "camuflados": str(obter_camuflados(ultimo)),
         "racetrack": max(SETORES_ROLETA, key=lambda s: sum(1 for n in sub_historico[-10:] if n in SETORES_ROLETA[s])) if len(sub_historico)>=10 else "-",
         "inversao": f"{ultimo}➔{invertido}" if invertido is not None else "-",
         "reincidencia": str([n for n in alvos_brutos if n in sub_historico[-3:]]) if any(n in sub_historico[-3:] for n in alvos_brutos) else "-",
         "confirmacoes": "🔴 " * min(filtros_ativos_contagem, 5),
-        "score_base": f"{min(filtros_ativos_contagem, 5)}/5",
+        "score": f"{min(filtros_ativos_contagem, 5)}/5",
+        "score_num": filtros_ativos_contagem,
+        "padrao_nome": padrao_nome,
         "alvos": alvos_ordenados,
         "scores_alvos": scores_alvos,
         "detalhes_alvos": detalhes_alvos,
-        "top_pontos": top_pontos,
         "score_maximo": score_maximo,
-        "dados_brk": res_brk
+        "status": f"SINAL: {alvos_ordenados}" if score_maximo >= 7.5 else "AGUARDAR"
     }
-
-# ==========================================
-# 6. ALERTAS TELEGRAM
-# ==========================================
-def enviar_alerta_telegram_score75(ultimo_num, alvos_filtrados, scores_alvos, detalhes_alvos):
-    linhas_alvos = []
-    for num in alvos_filtrados:
-        sc = scores_alvos.get(num, 0.0)
-        det = ", ".join(detalhes_alvos.get(num, []))
-        linhas_alvos.append(f"• *{num:02d}* ➔ Score 🔥 `{sc}` _({det})_")
-    texto_alvos = "\n".join(linhas_alvos)
-    
-    mensagem = (
-        f"🚨 *SINAL DE ALTA CONFIRMAÇÃO (SCORE ≥ 7.5)* 🚨\n\n"
-        f"📌 *Último Número:* `{ultimo_num}`\n"
-        f"🛡️ *Proteção OBRIGATÓRIA:* `0 (Zero)`\n\n"
-        f"🎯 *ALVOS SELECIONADOS:*\n{texto_alvos}\n\n"
-        f"⚠️ *Entrada Recomendada: Manter aposta de 3 a 4 rodadas.*"
-    )
-    return enviar_mensagem_telegram(mensagem)
-
-def enviar_resultado_telegram(tipo, numero, etapa=""):
-    if tipo == "GREEN":
-        msg = f"✅ *GREEN CONFIRMADO!* 🎉\n\n🎯 Número Bateu: `{numero}`\n📍 Momento: `{etapa}`"
-    else:
-        msg = f"❌ *RED / LOSS* 😔\n\n📌 Último Sorteado: `{numero}`\n⚠️ Limite de Gales atingido."
-    return enviar_mensagem_telegram(msg)
 
 # ==========================================
 # 7. EXECUÇÃO PRINCIPAL & ENGINE
 # ==========================================
 st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
-# Inicialização de Estado
 if "historico" not in st.session_state:
     st.session_state.historico = []
 if "sinal_ativo" not in st.session_state:
     st.session_state.sinal_ativo = False
     st.session_state.alvos_sinal = []
     st.session_state.tentativa_atual = 0
-if "ultimo_status_resultado" not in st.session_state:
-    st.session_state.ultimo_status_resultado = "Aguardando primeiro sinal..."
+    st.session_state.ultimo_resultado = None
 
-# Painel Lateral
+# ================= PAINEL LATERAL RESTAURADO ====================
 st.sidebar.header("🕹️ Painel de Operação")
-modo_operacao = st.sidebar.selectbox("🌐 Modo de Operação:", ["On-line (Captura Automática)", "Off-line (Digitação Manual)"])
-roleta_selecionada = st.sidebar.selectbox("🎰 Selecionar Roleta:", list(URLS_ROLETAS.keys()))
+modo_operacao = st.sidebar.selectbox(
+    "🌐 Modo de Operação:",
+    ["On-line (Captura Automática)", "Off-line (Digitação Manual)"]
+)
+roleta_selecionada = st.sidebar.selectbox(
+    "🎰 Selecionar Roleta:",
+    list(URLS_ROLETAS.keys())
+)
+st.sidebar.markdown("---")
 
-# Processamento de Novo Número
+st.sidebar.subheader("🎛️ Filtro Híbrido de Assertividade (200 Rodadas)")
+filtro_hibrido_opcao = st.sidebar.selectbox(
+    "Nível de Filtragem dos Sinais:",
+    [
+        "Desativado (Usar apenas regras fixas)",
+        "🥉 Radar (Top 30 - Permissivo)",
+        "🥈 Seleção (Top 10 - Equilibrado)",
+        "🥇 Seleção Ouro (Top 5 - Conservador)",
+        "👑 Elite (Top 3 - Máxima Precisão)"
+    ],
+    index=2
+)
+modo_gale_opcao = st.sidebar.radio(
+    "Estratégia no Gale ao detectar novo Sinal Elite:",
+    ["Opção A: Mantém Sinal A (Aposta Fixa)", "Opção B: Fusão de Alvos Únicos (A + B)"],
+    index=1
+)
+st.sidebar.markdown("---")
+
+# ==========================================
+# PROCESSAMENTO DE NOVO NÚMERO COM FILTROS
+# ==========================================
 def processar_novo_numero(num_novo):
     if st.session_state.sinal_ativo:
         st.session_state.tentativa_atual += 1
@@ -398,36 +505,85 @@ def processar_novo_numero(num_novo):
         alvos_com_zero = set(st.session_state.alvos_sinal + [0])
         if num_novo in alvos_com_zero:
             enviar_resultado_telegram("GREEN", num_novo, etapa_nome)
-            st.session_state.ultimo_status_resultado = f"✅ GREEN ({etapa_nome}) — Número: {num_novo}"
+            st.session_state.ultimo_resultado = f"GREEN ✅ ({etapa_nome})"
             st.session_state.sinal_ativo = False
             st.session_state.tentativa_atual = 0
             st.session_state.alvos_sinal = []
             return
         elif st.session_state.tentativa_atual >= 3:
             enviar_resultado_telegram("LOSS", num_novo)
-            st.session_state.ultimo_status_resultado = f"❌ RED — Último: {num_novo}"
+            st.session_state.ultimo_resultado = "LOSS / RED ❌"
             st.session_state.sinal_ativo = False
             st.session_state.tentativa_atual = 0
             st.session_state.alvos_sinal = []
             return
     
-    if len(st.session_state.historico) >= 10:
+    if len(st.session_state.historico) >= 20:
         historico_analise = list(reversed(st.session_state.historico))
-        res = analisar_rodada_especifica(historico_analise)
-        alvos_qualificados = [num for num in res["alvos"] if res["scores_alvos"].get(num, 0.0) >= 7.5]
+        res_ultimo = analisar_rodada_especifica(historico_analise)
         
-        if alvos_qualificados and not st.session_state.sinal_ativo:
-            st.session_state.sinal_ativo = True
-            st.session_state.alvos_sinal = alvos_qualificados
-            st.session_state.tentativa_atual = 0
-            enviar_alerta_telegram_score75(
-                res["ultimo"], alvos_qualificados,
-                res["scores_alvos"], res["detalhes_alvos"]
-            )
+        if res_ultimo["score_num"] >= 4:
+            tiers, df_rank = obter_tiers_cache()
+            padrao = res_ultimo["padrao_nome"]
+            
+            posicao_rank = None
+            taxa_acerto = None
+            if not df_rank.empty and padrao in df_rank["Padrão"].values:
+                idx = df_rank[df_rank["Padrão"] == padrao].index[0]
+                posicao_rank = idx + 1
+                taxa_acerto = df_rank.loc[idx, "Taxa de Acerto (%)"]
+            
+            tier_do_padrao = "Fora dos Tiers"
+            if padrao in tiers.get("ELITE_TOP_3", []):
+                tier_do_padrao = "👑 Elite (Top 3)"
+            elif padrao in tiers.get("SELECAO_OURO_TOP_5", []):
+                tier_do_padrao = "🥇 Seleção Ouro (Top 5)"
+            elif padrao in tiers.get("SELECAO_TOP_10", []):
+                tier_do_padrao = "🥈 Seleção (Top 10)"
+            elif padrao in tiers.get("RADAR_TOP_30", []):
+                tier_do_padrao = "🥉 Radar (Top 30)"
+            
+            permitido = False
+            if filtro_hibrido_opcao == "Desativado (Usar apenas regras fixas)":
+                permitido = True
+            elif filtro_hibrido_opcao == "🥉 Radar (Top 30 - Permissivo)" and tier_do_padrao != "Fora dos Tiers":
+                permitido = True
+            elif filtro_hibrido_opcao == "🥈 Seleção (Top 10 - Equilibrado)" and tier_do_padrao in ["👑 Elite (Top 3)", "🥇 Seleção Ouro (Top 5)", "🥈 Seleção (Top 10)"]:
+                permitido = True
+            elif filtro_hibrido_opcao == "🥇 Seleção Ouro (Top 5 - Conservador)" and tier_do_padrao in ["👑 Elite (Top 3)", "🥇 Seleção Ouro (Top 5)"]:
+                permitido = True
+            elif filtro_hibrido_opcao == "👑 Elite (Top 3 - Máxima Precisão)" and tier_do_padrao == "👑 Elite (Top 3)":
+                permitido = True
+            
+            if st.session_state.sinal_ativo:
+                if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
+                    alvos_novos = [n for n in res_ultimo["alvos"] if n not in st.session_state.alvos_sinal]
+                    if alvos_novos and len(st.session_state.alvos_sinal) < 10:
+                        st.session_state.alvos_sinal.extend(alvos_novos)
+                        enviar_mensagem_telegram(
+                            f"🔄 *FUSÃO DE ALVOS (GALE)*\n"
+                            f"Novos alvos: `{alvos_novos}`\n"
+                            f"Total: `{st.session_state.alvos_sinal}`"
+                        )
+            elif permitido:
+                st.session_state.sinal_ativo = True
+                st.session_state.alvos_sinal = res_ultimo["alvos"]
+                st.session_state.tentativa_atual = 0
+                enviar_alerta_telegram(
+                    res_ultimo["ultimo"],
+                    res_ultimo["score_num"],
+                    res_ultimo["alvos"],
+                    [f"Padrão: {padrao}", f"Filtro: {filtro_hibrido_opcao}"],
+                    tier_nome=tier_do_padrao,
+                    posicao_rank=posicao_rank,
+                    taxa_acerto=taxa_acerto
+                )
 
-# Modo Online
+# ==========================================
+# CAPTURA DE DADOS
+# ==========================================
 if modo_operacao == "On-line (Captura Automática)":
-    st.sidebar.info(f"🔄 Modo Online: **{roleta_selecionada}**")
+    st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
     
     if novos_dados and novos_dados != st.session_state.historico:
@@ -449,117 +605,169 @@ else:
         st.session_state.sinal_ativo = False
         st.session_state.alvos_sinal = []
         st.session_state.tentativa_atual = 0
-        st.session_state.ultimo_status_resultado = "Aguardando primeiro sinal..."
+        st.session_state.ultimo_resultado = None
+        for chave in ["tier_cache", "df_rank_cache", "tier_cache_tamanho"]:
+            if chave in st.session_state:
+                del st.session_state[chave]
         st.rerun()
 
 # ==========================================
-# 8. EXIBIÇÃO VISUAL COMPLETA
+# EXIBIÇÃO VISUAL COMPLETA
 # ==========================================
+st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
 if st.session_state.historico:
-    # Esteira Temporal
-    st.subheader("📋 Esteira Temporal (Últimas 14 Rodadas)")
     janela_14 = st.session_state.historico[:14]
-    cols_esteira = st.columns(14)
+    cols = st.columns(min(len(janela_14), 14))
     for i, num in enumerate(janela_14):
-        with cols_esteira[i]:
-            st.caption(f"Pos {i+1:02d}")
-            st.markdown(f"### **{num}**")
-    
-    # Status do Resultado
-    if "✅" in st.session_state.ultimo_status_resultado:
-        st.success(st.session_state.ultimo_status_resultado)
-    elif "❌" in st.session_state.ultimo_status_resultado:
-        st.error(st.session_state.ultimo_status_resultado)
-    else:
-        st.info(st.session_state.ultimo_status_resultado)
-    
-    # Alerta BRK
+        with cols[i]:
+            st.metric(label=f"Pos {i+1:02d}", value=num)
+
+if st.session_state.historico and len(st.session_state.historico) >= 2:
     historico_cron = list(reversed(st.session_state.historico))
     res_brk = validar_gatilho_sequencial_brk(historico_cron)
+    
     if res_brk["sinal_ativo"]:
         st.markdown("---")
-        st.success(f"🎯 **GATILHO BRK — GRUPO {res_brk['grupo_confirmado']}!** ({res_brk['dezena_gatilho']} ➔ {res_brk['dezena_confirmada']})")
-        c1, c2 = st.columns(2)
-        with c1: st.error(f"🔥 Prioridade: `{res_brk['prioridade_maxima']}`")
-        with c2: st.warning(f"🛡️ Cobertura: `{res_brk['cobertura']}`")
+        st.success(f"🎯 **GATILHO OCULTO BRK CONFIRMADO PARA O GRUPO {res_brk['grupo_confirmado']}!**")
+        st.markdown(f"**Validação:** A dezena recente `{res_brk['dezena_gatilho']}` confirmou a dezena anterior `{res_brk['dezena_confirmada']}`.")
+        
+        c_prio, c_cob = st.columns(2)
+        with c_prio:
+            st.error(f"🔥 **PRIORIDADE MÁXIMA:**\n\n`{res_brk['prioridade_maxima']}`")
+        with c_cob:
+            st.warning(f"🛡️ **COBERTURA:**\n\n`{res_brk['cobertura']}`")
+        st.info("⏱️ Manter apostas neste grupo por 3 a 4 rodadas.")
+
+if st.session_state.ultimo_resultado:
+    if "GREEN" in st.session_state.ultimo_resultado:
+        st.success(f"🎉 Resultado do Último Sinal: **{st.session_state.ultimo_resultado}**")
+    else:
+        st.error(f"⚠️ Resultado do Último Sinal: **{st.session_state.ultimo_resultado}**")
+
+st.markdown("---")
+if st.session_state.historico:
+    tiers_atuais, df_rank = obter_tiers_cache()
     
-    st.markdown("---")
+    with st.expander("🏆 Ranking dos Padrões (Últimas 200 Rodadas)", expanded=True):
+        if not df_rank.empty:
+            st.dataframe(df_rank, use_container_width=True, hide_index=True)
+        else:
+            st.info("Aguardando histórico suficiente (mínimo ~20 rodadas) para consolidação do ranking.")
     
-    # Painel Estatístico
-    st.subheader("📊 Estatísticas (Últimas 200 Rodadas)")
-    amostra_200 = st.session_state.historico[:200]
-    freq_series = pd.Series(amostra_200).value_counts()
+    historico_analise = list(reversed(st.session_state.historico))
+    res_ultimo = analisar_rodada_especifica(historico_analise)
     
-    col_g1, col_g2, col_g3 = st.columns([1, 1, 1.2])
+    if res_ultimo["score_num"] >= 4:
+        st.error(f"🚨 SINAL IDENTIFICADO: {res_ultimo['alvos']}")
+        
+        if st.button("📤 Reenviar Alerta para Telegram"):
+            posicao_rank = None
+            taxa_acerto = None
+            if not df_rank.empty and res_ultimo["padrao_nome"] in df_rank["Padrão"].values:
+                idx = df_rank[df_rank["Padrão"] == res_ultimo["padrao_nome"]].index[0]
+                posicao_rank = idx + 1
+                taxa_acerto = df_rank.loc[idx, "Taxa de Acerto (%)"]
+            
+            sucesso, msg = enviar_alerta_telegram(
+                res_ultimo["ultimo"],
+                res_ultimo["score_num"],
+                res_ultimo["alvos"],
+                [res_ultimo["status"]],
+                posicao_rank=posicao_rank,
+                taxa_acerto=taxa_acerto
+            )
+            if sucesso:
+                st.success(msg)
+            else:
+                st.error(msg)
+
+st.markdown("---")
+st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 1000)")
+
+if st.session_state.historico:
+    total_disponivel = len(st.session_state.historico)
+    max_amostra = min(1000, total_disponivel)
+    qtd_rodadas = st.slider(
+        "Tamanho da amostra (Últimas X rodadas):",
+        min_value=min(10, total_disponivel),
+        max_value=max_amostra,
+        value=max_amostra,
+        step=5
+    )
+    
+    amostra = list(reversed(st.session_state.historico[:qtd_rodadas]))
+    total_amostra = len(amostra) or 1
+    
+    col_g1, col_g2, col_g3 = st.columns(3)
+    
     with col_g1:
-        st.markdown("#### 🔥 Quentes / Frios")
-        quentes = freq_series.head(5).index.tolist()
-        frios = freq_series.tail(5).index.tolist()
-        st.write(f"Mais frequentes: `{quentes}`")
-        st.write(f"Menos frequentes: `{frios}`")
-        fig_top = px.bar(x=[str(x) for x in freq_series.head(10).index], y=freq_series.head(10).values,
-                         labels={'x': 'Número', 'y': 'Freq'}, title="Top 10")
-        fig_top.update_layout(height=280, margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig_top, use_container_width=True)
+        st.markdown("### 📊 QUENTES/FRIOS")
+        contagem = pd.Series(amostra).value_counts()
+        quentes = contagem.head(5).index.tolist()
+        frios = contagem.tail(5).index.tolist()
+        
+        st.write(f"🔥 **Mais Frequentes:** `{quentes}`")
+        st.write(f"🧊 **Menos Frequentes:** `{frios}`")
+        
+        freq_df = pd.DataFrame({'Número': contagem.index.astype(str), 'Frequência': contagem.values})
+        fig_freq = px.bar(freq_df.head(10), x='Número', y='Frequência', title="Top 10 Números")
+        fig_freq.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig_freq, use_container_width=True)
     
     with col_g2:
-        st.markdown("#### 📊 Dúzias")
-        total = len(amostra_200) or 1
-        d1 = sum(1 for n in amostra_200 if 1 <= n <= 12) / total * 100
-        d2 = sum(1 for n in amostra_200 if 13 <= n <= 24) / total * 100
-        d3 = sum(1 for n in amostra_200 if 25 <= n <= 36) / total * 100
-        fig_duz = px.bar(x=["1ª", "2ª", "3ª"], y=[d1, d2, d3],
-                         labels={'x': 'Dúzia', 'y': '%'}, title="Distribuição (%)")
-        fig_duz.update_layout(height=280, margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig_duz, use_container_width=True)
+        st.markdown("### 📊 AVANÇADA")
+        d1 = sum(1 for n in amostra if 1 <= n <= 12) / total_amostra * 100
+        d2 = sum(1 for n in amostra if 13 <= n <= 24) / total_amostra * 100
+        d3 = sum(1 for n in amostra if 25 <= n <= 36) / total_amostra * 100
+        
+        c1 = sum(1 for n in amostra if n > 0 and n % 3 == 1) / total_amostra * 100
+        c2 = sum(1 for n in amostra if n > 0 and n % 3 == 2) / total_amostra * 100
+        c3 = sum(1 for n in amostra if n > 0 and n % 3 == 0) / total_amostra * 100
+        
+        df_duzias = pd.DataFrame({
+            'Grupo': ['1ª Dúzia', '2ª Dúzia', '3ª Dúzia', '1ª Coluna', '2ª Coluna', '3ª Coluna'],
+            'Porcentagem': [round(d1,1), round(d2,1), round(d3,1), round(c1,1), round(c2,1), round(c3,1)]
+        })
+        
+        fig_adv = px.bar(df_duzias, x='Grupo', y='Porcentagem', text='Porcentagem', title="Distribuição (%)")
+        fig_adv.update_traces(texttemplate='%{text}%', textposition='outside')
+        fig_adv.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=5))
+        st.plotly_chart(fig_adv, use_container_width=True)
     
     with col_g3:
-        st.markdown("#### 🗺️ Mapa de Calor")
-        matriz_mesa = [[3,6,9,12,15,18,21,24,27,30,33,36],
-                       [2,5,8,11,14,17,20,23,26,29,32,35],
-                       [1,4,7,10,13,16,19,22,25,28,31,34]]
-        matriz_freq = [[amostra_200.count(num) for num in lin] for lin in matriz_mesa]
-        fig_heat = px.imshow(matriz_freq, x=[str(x) for x in matriz_mesa[0]],
-                             y=["3ª", "2ª", "1ª"], color_continuous_scale="Reds", title="Frequência")
-        fig_heat.update_layout(height=280, margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig_heat, use_container_width=True)
-    
-    st.markdown("---")
-    
-    # Tabela Analítica
-    st.subheader(f"📋 Mapeamento Analítico — {roleta_selecionada}")
-    dados_tabela = []
-    janela_exibicao = st.session_state.historico[:10]
-    for idx, num in enumerate(janela_exibicao):
-        sub_hist = list(reversed(st.session_state.historico[idx:]))
-        res = analisar_rodada_especifica(sub_hist)
-        pts = res.get("top_pontos", {})
-        sc_max = res.get("score_maximo", 0.0)
-        alvos_top = [n for n in res["alvos"] if res["scores_alvos"].get(n, 0.0) >= 7.5]
-        status_txt = f"🚨 SINAL: {alvos_top}" if alvos_top else "AGUARDAR"
+        st.markdown(f"### 📊 ÚLTIMAS {qtd_rodadas}")
+        matriz_freq = {n: amostra.count(n) for n in range(0, 37)}
+        st.write("🔥 **Mapa de Calor da Mesa (0 a 36):**")
         
-        dados_tabela.append({
-            "Posição": f"Pos {idx+1:02d}",
-            "Último": res["ultimo"],
-            "Esquerda": res["esquerda"],
-            "Direita": res["direita"],
-            "Puxadores": res["puxadores"],
-            "Vizinhos": res["vizinhos_str"],
-            "Camuflados": res["camuflados"],
-            "Racetrack": res["racetrack"],
-            "Inversão": res["inversao"],
-            "Reincidência": res["reincidencia"],
-            "Score Base": res["score_base"],
-            "Score Máx 🔥": sc_max,
-            "Status": status_txt
-        })
-    
-    df_exibicao = pd.DataFrame(dados_tabela)
-    st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
-    
-    # Reenvio de Alerta
-    if alvos_top and st.button("📤 Reenviar Alerta Telegram"):
-        ok, msg = enviar_alerta_telegram_score75(res["ultimo"], alvos_top, res["scores_alvos"], res["detalhes_alvos"])
-        st.success(msg) if ok else st.error(msg)
+        grid_rows = [
+            [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
+            [0, 2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+            [0, 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
+        ]
+        
+        z_vals = [[matriz_freq[n] for n in row] for row in grid_rows]
+        text_vals = [[f"{n}<br>({matriz_freq[n]})" for n in row] for row in grid_rows]
+        
+        fig_grid = go.Figure(data=go.Heatmap(
+            z=z_vals,
+            text=text_vals,
+            texttemplate='%{text}',
+            colorscale='RdYlGn',
+            showscale=True
+        ))
+        
+        fig_grid.update_layout(
+            height=320,
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis_showticklabels=False,
+            yaxis_showticklabels=False,
+            template="plotly_dark"
+        )
+        st.plotly_chart(fig_grid, use_container_width=True)
+
+st.markdown("---")
+st.subheader("📋 Últimos 14 Números Recebidos")
+if st.session_state.historico:
+    st.write(" | ".join(str(n) for n in st.session_state.historico[:14]))
 else:
-    st.info("ℹ️ Aguardando dados — digite números manualmente ou configure a API.")
+    st.info("Aguardando recebimento de números...")
