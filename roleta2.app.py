@@ -677,12 +677,15 @@ if st.session_state.historico:
         puxs_lista = puxadores_dict.get(num, [])
         px_top1 = [puxs_lista[0]] if len(puxs_lista) > 0 else []
         dezenas_ausentes = dados_brk_in["ausentes"] if num in dados_brk_in["ausentes"] else []
-
+        
+# Formatação limpa para evitar vazamento de np.int64
         sugestao = res_tiro_certo["status_nome"]
         if res_tiro_certo["alvos_headshot"]:
-            sugestao += f": {res_tiro_certo['alvos_headshot']}"
+            alvos_limpos = [int(x) for x in res_tiro_certo["alvos_headshot"]]
+            sugestao += f": {alvos_limpos}"
         elif res_tiro_certo["alvos_tiro_certo"]:
-            sugestao += f": {res_tiro_certo['alvos_tiro_certo']}"
+            alvos_limpos = [int(x) for x in res_tiro_certo["alvos_tiro_certo"]]
+            sugestao += f": {alvos_limpos}"
 
         dados_tabela.append({
             "Último": res["ultimo"],
