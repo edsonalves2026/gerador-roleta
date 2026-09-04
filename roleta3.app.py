@@ -726,102 +726,125 @@ if st.session_state.historico:
 # ==========================================
 st.markdown("---")
 st.subheader("🚨 SINAL ATIVO — Área de Aposta")
+
 if st.session_state.sinal_ativo:
     alvos_exibidos = st.session_state.alvos_sinal
     tentativa = st.session_state.tentativa_atual
-    etapa_nome = {0: "Entrada Direta", 1: "Gale 1 (G1)", 2: "Gale 2 (G2)"}.get(tentativa, f"Gale {tentativa}")
+    etapa_nome = {
+        0: "🎯 Entrada Direta",
+        1: "📈 Gale 1 (G1)",
+        2: "📊 Gale 2 (G2)"
+    }.get(tentativa, f"🔄 Tentativa {tentativa}")
+
     st.warning(f"""
     ⚠️ **SINAL DISPARADO — {etapa_nome}**
     🎰 Roleta: **{roleta_selecionada}**
-    🎲 Alvos sugeridos: **{alvos_exibidos}**
-    ➕ Proteção no Zero: **0**
-    🔄 Tentativa: {tentativa + 1}/3
+    🎲 Números Alvo: **{alvos_exibidos}**
+    🔢 Total de alvos: **{len(alvos_exibidos)}**
     """)
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📤 Reenviar alerta ao Telegram", type="primary"):
-            ok, msg = enviar_mensagem_telegram(
-                f"""🚨 *REENVIADO — SINAL ATIVO* 🚨
-🎰 Roleta: `{roleta_selecionada}`
-🎲 Alvos: `{alvos_exibidos}`
-🔄 Etapa: {etapa_nome}
-"""
-            )
-            if ok:
-                st.success("✅ Mensagem reenviada!")
+
+    # Exibição visual dos números alvo com cores
+    cols_alvos = st.columns(len(alvos_exibidos))
+    for idx, num in enumerate(alvos_exibidos):
+        with cols_alvos[idx]:
+            if num == 0:
+                cor_fundo = "#00AA00"
+            elif num in NUMEROS_VERMELHOS:
+                cor_fundo = "#FF2222"
             else:
-                st.error(f"❌ Erro: {msg}")
-    with col2:
-        if st.button("🛑 Cancelar Sinal"):
-            st.session_state.sinal_ativo = False
-            st.session_state.alvos_sinal = []
-            st.session_state.tentativa_atual = 0
-            st.rerun()
+                cor_fundo = "#000000"
+            st.markdown(f"""
+            <div style="background-color:{cor_fundo}; color:#FFF; border-radius:8px; 
+                        padding:15px; text-align:center; font-size:22px; font-weight:bold;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                {num}
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.info("""
+    💡 **Regras de Aposta:**
+    - ✅ Se sair **qualquer número alvo ou o 0** → **GREEN** (Sinal encerrado)
+    - ❌ Se errar → avança para a próxima etapa (Gale)
+    - 🔄 Após 3 tentativas sem acerto → **LOSS** (Sinal encerrado)
+    """)
+
 else:
-    st.success("✅ Sem sinal ativo — Aguardando convergência de padrões...")
-    st.caption("O sinal é disparado automaticamente quando o Score ponderado atinge o limite mínimo.")
+    st.success("✅ Nenhum sinal ativo no momento — Aguardando padrões...")
+
+# ==========================================
+# 📊 HISTÓRICO DE RESULTADOS
+# ==========================================
+st.markdown("---")
+st.subheader("📊 Histórico de Resultados")
 
 if st.session_state.ultimo_resultado:
-    st.markdown("---")
-    if "GREEN" in st.session_state.ultimo_resultado:
-        st.success(st.session_state.ultimo_resultado)
-    else:
-        st.error(st.session_state.ultimo_resultado)
+    st.markdown(f"**Último Resultado:** {st.session_state.ultimo_resultado}")
+else:
+    st.info("Nenhum resultado registrado ainda.")
+
+# Estatísticas simples do histórico
+if len(st.session_state.historico) > 0:
+    total_rodadas = len(st.session_state.historico)
+    ultimo_numero = st.session_state.historico[0]
+    st.markdown(f"""
+    📋 **Resumo:**
+    - Total de rodadas registradas: **{total_rodadas}**
+    - Último número sorteado: **{ultimo_numero}**
+    - Status do sinal: **{'🔴 ATIVO' if st.session_state.sinal_ativo else '🟢 Inativo'}**
+    """)
 
 # ==========================================
-# 🏆 RANKING DOS PADRÕES
+# 🏆 RANKING DE PADRÕES
 # ==========================================
 st.markdown("---")
-with st.expander("🏆 Ver Ranking de Assertividade dos Padrões (Análise 200 Rodadas)"):
-    if len(st.session_state.historico) >= 50:
-        tiers, df_rank = obter_tiers_cache()
-        if not df_rank.empty:
-            st.dataframe(df_rank, use_container_width=True, hide_index=True)
-            st.markdown("### Definição dos Tiers")
-            st.markdown("""
-            - 👑 **Elite (Top 3)** — Padrões com maior taxa de acerto histórica
-            - 🥇 **Seleção Ouro (Top 5)** — Padrões de altíssima confiança
-            - 🥈 **Seleção (Top 10)** — Padrões com boa consistência
-            - 🥉 **Radar (Top 30)** — Padrões válidos, com maior volume de amostras
-            """)
-        else:
-            st.info("Ainda não há padrões classificados com dados suficientes.")
-    else:
-        st.info(f"Acumule pelo menos 50 rodadas para gerar o ranking. (Atual: {len(st.session_state.historico)})")
+st.subheader("🏆 Ranking de Padrões — Taxa de Acerto")
+
+tiers, df_rank = obter_tiers_cache()
+if not df_rank.empty:
+    st.dataframe(df_rank, use_container_width=True, hide_index=True)
+else:
+    st.info("Dados insuficientes para gerar ranking de padrões (mínimo 20 rodadas necessárias)")
 
 # ==========================================
-# 📋 RESUMO DAS REGRAS DE PESO
+# 📋 MANUAL DO SISTEMA
 # ==========================================
 st.markdown("---")
-with st.expander("📖 Manual do Sistema — Pesos e Regras de Filtro"):
+with st.expander("📖 Manual Completo do Sistema — Regras e Funcionamento", expanded=False):
     st.markdown("""
-    ### 🎯 Sistema de Pontuação Ponderada
-    | Filtro | Peso | Descrição |
-    |---|---|---|
-    | **Ausente (BRK)** | **+3.0** | Número que falta para completar o grupo BRK |
-    | **Px top 1** | **+2.5** | Primeiro número mais frequente após o último |
-    | **2F Convergência** | **+2.0** | Número aparece em 2+ filtros simultâneos |
-    | **Px top 2** | **+1.5** | Segundo número mais frequente |
-    | **Inversão** | **+1.5** | Dezena invertida do último número sorteado |
-    | **+Quente 100R** | **+1.0** | Está entre os 10 mais sorteados nas últimas 100 |
-    | **Vizinhos** | **+1.0** | Vizinhos imediatos do último número |
-    | **Última 13ª posição** | **+1.0** | Número que apareceu na posição 13 |
+    ### 🎯 Sistema TIRO CERTO + HEAD-SHOT
 
-    ### 🏅 Níveis de Score
-    | Score | Classificação | Ação Sugerida |
-    |---|---|---|
-    | **≥ 7.5** | 💥 HEAD-SHOT | Entrada imediata — máxima confiança |
-    | **5.0 a 7.4** | 🎯 TIRO CERTO | Entrada padrão — boa convergência |
-    | **3.0 a 4.9** | ⏳ Observação | Pontuação insuficiente |
-    | **< 3.0** | ❌ Descartado | Sem relevância estatística |
+    **Objetivo:** Identificar padrões estatísticos e sugerir números com maior probabilidade de sair.
 
-    ### 🔒 Regras de Corte Final
-    - Apenas **3 últimas posições + posição 13** geram candidatos (reduz ruído)
-    - **Máximo 7 alvos** no TIRO CERTO
-    - **Máximo 4 alvos** no HEAD-SHOT (apenas os mais fortes)
-    - BRK Ausente → aprovação direta para HEAD-SHOT
-    - BRK Já saiu → aprova apenas se ativo nas últimas 30 rodadas
-    - Telegram dispara **apenas em Score ≥ 7.5 (HEAD-SHOT)** ou ≥ 5.0 com filtro liberado
+    ---
+    ### 📐 Critérios de Pontuação
+    | Critério | Pontuação |
+    |---|---|
+    | Número ausente no grupo BRK | +3.0 |
+    | Primeiro número mais frequente | +2.5 |
+    | Segundo número mais frequente | +1.5 |
+    | Número invertido | +1.5 |
+    | Vizinhos imediatos | +1.0 cada |
+    | Número quente (últimos 100) | +1.0 |
+    | Número da posição 13 | +1.0 |
+    | Convergência de múltiplos critérios | +2.0 por critério extra |
+
+    **Limiares:**
+    - Score ≥ 3.0 → TIRO CERTO (mínimo 4 alvos)
+    - Score ≥ 7.5 + maturação → HEAD-SHOT
+
+    ---
+    ### 🟢 Regras de Acerto
+    - Acertou → **GREEN** ✅ (sinal encerrado)
+    - Errou → avança para **G1**, depois **G2**
+    - 3 erros seguidos → **LOSS** ❌
+
+    ---
+    ### 🎛️ Níveis de Filtro
+    - **Desativado:** emite todos os sinais detectados
+    - **🥉 Radar:** apenas padrões do Top 30
+    - **🥈 Seleção:** apenas padrões do Top 10
+    - **🥇 Ouro:** apenas padrões do Top 5
+    - **👑 Elite:** apenas padrões do Top 3 (maior precisão)
     """)
 
 # ==========================================
@@ -829,8 +852,7 @@ with st.expander("📖 Manual do Sistema — Pesos e Regras de Filtro"):
 # ==========================================
 st.markdown("---")
 st.caption("""
-⚡ Radar de Roleta Pro — Sistema TIRO CERTO + HEAD-SHOT com Ponderação Ponderada
-✅ Validação: 3 últimas posições + posição 13 da esteira | ✅ Máximo 7 alvos (TIRO CERTO) / 4 alvos (HEAD-SHOT)
-✅ BRK com Maturação Condicional | ✅ Ranking de Assertividade por Padrão
+⚡ Radar de Roleta Pro — Sistema TIRO CERTO + HEAD-SHOT com Score Ponderado
+✅ Validação BRK + Padrões Históricos + Ranking de Assertividade
+🔄 Atualização automática a cada 15 segundos | 🔔 Alertas via Telegram
 """)
-
