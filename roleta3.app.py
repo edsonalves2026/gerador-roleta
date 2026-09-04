@@ -1,5 +1,6 @@
 import time
 import uuid
+import urllib.parse
 import requests
 import pandas as pd
 import numpy as np
@@ -51,11 +52,12 @@ GRUPO_OCULTO_BRK = {
     "GRUPO_C": [7, 8, 9, 10, 17, 18, 19, 20, 27, 28, 29, 30]
 }
 
+# Endpoints base higienizados sem query strings hardcoded
 URLS_ROLETAS = {
-    "XXXtreme Lightning": "https://api.core.public.tipminer.com/v1/roulette/rounds/e640b7c7-aaba-4ffa-a678-6b6872898162/history?limit=200",
-    "Roleta Brasileira": "https://api.core.public.tipminer.com/v1/roulette/rounds/45d12dd3-8f85-4ab2-8c86-4eaea7967e10/history?limit=200",
-    "Immersive Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-f3703302d5cc/history?limit=200",
-    "Swedish Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-40d2-b479-a28a01c6ee13/history?limit=200"
+    "XXXtreme Lightning": "https://api.core.public.tipminer.com/v1/roulette/rounds/e640b7c7-aaba-4ffa-a678-6b6872898162/history",
+    "Roleta Brasileira": "https://api.core.public.tipminer.com/v1/roulette/rounds/45d12dd3-8f85-4ab2-8c86-4eaea7967e10/history",
+    "Immersive Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-f3703302d5cc/history",
+    "Swedish Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-40d2-b479-a28a01c6ee13/history"
 }
 
 VIZINHOS_ZERO = [1, 5, 8, 11, 14, 23, 26, 32]
@@ -64,6 +66,8 @@ VIZINHOS_ZERO = [1, 5, 8, 11, 14, 23, 26, 32]
 # FUNÇÕES AUXILIARES
 # ==========================================
 def obter_vizinhos_mesa(num):
+    if num not in ROULETTE_CYLINDER:
+        return {"esq_2": None, "esq_1": None, "dir_1": None, "dir_2": None}
     idx = ROULETTE_CYLINDER.index(num)
     n = len(ROULETTE_CYLINDER)
     return {
@@ -85,7 +89,10 @@ def obter_camuflados(num):
     camu = set()
     if inv is not None:
         camu.add(inv)
-    camu.update([viz["esq_1"], viz["dir_1"]])
+    if viz["esq_1"] is not None:
+        camu.add(viz["esq_1"])
+    if viz["dir_1"] is not None:
+        camu.add(viz["dir_1"])
     return sorted(list(camu))
 
 def obter_puxadores_otimizados(ultimo, sub_historico):
@@ -206,7 +213,7 @@ def aplicar_filtro_tiro_certo_e_headshot(sub_historico, res_brk, puxadores, inve
         pontuacao_numeros[pos13] += 1.0
         detalhe_pesos[pos13]["Ult 13"] = 1.0
 
-    todos_candidatos = brk_ausentes + brk_cobertura + (puxadores[:2] if puxadores else []) + ([invertido] if invertido else []) + [n for n in viz_list if n]
+    todos_candidatos = brk_ausentes + brk_cobertura + (puxadores[:2] if puxadores else []) + ([invertido] if invertido else []) + [n for n in viz_list if n is not None]
     frequencia = Counter(todos_candidatos)
     for n, qtd in frequencia.items():
         if qtd > 1:
@@ -255,35 +262,43 @@ def aplicar_filtro_tiro_certo_e_headshot(sub_historico, res_brk, puxadores, inve
     }
 
 # ==========================================
-# INTEGRAÇÃO API — CORRIGIDA COM CABEÇALHOS
+# INTEGRAÇÃO API — OTIMIZADA E ESTRUTURADA
 # ==========================================
 def buscar_dados_roleta_url(roleta_nome):
     url_base = URLS_ROLETAS.get(roleta_nome)
     if not url_base:
         return []
 
-    cb = str(uuid.uuid4())
-    url = f"{url_base}&timezone=America%2FSao_Paulo&_cb={cb}"
+    params = {
+        "limit": "200",
+        "timezone": "America/Sao_Paulo",
+        "_cb": str(uuid.uuid4())
+    }
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://www.tipminer.com/",
+        "Origin": "https://www.tipminer.com",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site"
+    }
 
     try:
         session = requests.Session()
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Referer": "https://www.tipminer.com/",
-            "Origin": "https://www.tipminer.com",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-site"
-        }
-        resp = session.get(url, headers=headers, timeout=10)
+        resp = session.get(url_base, params=params, headers=headers, timeout=10)
 
         if resp.status_code == 200:
             dados = resp.json()
             numeros = []
-            if isinstance(dados, list):
-                for item in dados:
+            
+            # Tratamento adaptativo caso o retorno seja dict {'data': [...]} ou list direto
+            itens = dados.get("data", dados) if isinstance(dados, dict) else dados
+            
+            if isinstance(itens, list):
+                for item in itens:
                     if isinstance(item, dict):
                         val = item.get("result")
                         if val is not None and isinstance(val, (int, float)):
@@ -293,7 +308,7 @@ def buscar_dados_roleta_url(roleta_nome):
             st.sidebar.warning(f"API Status: {resp.status_code}")
             return []
     except Exception as e:
-        st.sidebar.warning(f"Erro: {str(e)[:80]}")
+        st.sidebar.warning(f"Erro ao buscar API: {str(e)[:80]}")
         return []
 
 # ==========================================
@@ -505,7 +520,7 @@ filtro_hibrido_opcao = st.sidebar.selectbox(
 st.sidebar.markdown("---")
 
 # ==========================================
-# ✅ MODO AUTOMÁTICO — CORRIGIDO E SEM TRAVAMENTO
+# MODO AUTOMÁTICO - CORRIGIDO SEM TRAVAMENTO
 # ==========================================
 if modo_operacao == "On-line (Captura Automática)":
     st.markdown("🔄 **Modo Automático Ativo — Verificando a cada 15s...**")
@@ -535,10 +550,13 @@ if modo_operacao == "On-line (Captura Automática)":
             st.session_state.erros_consecutivos_api += 1
             st.sidebar.warning(f"🟡 Falha na busca ({st.session_state.erros_consecutivos_api}/5)")
             if st.session_state.erros_consecutivos_api >= 5:
-                st.error("🔌 Muitas falhas — verifique conexão ou API")
+                st.error("🔌 Muitas falhas — verifique a conexão ou os parâmetros da API.")
 
-    proxima = max(0, 15 - int(time.time() - st.session_state.ultima_busca_api))
+    tempo_passado = int(time.time() - st.session_state.ultima_busca_api)
+    proxima = max(0, 15 - tempo_passado)
     st.info(f"⏳ Próxima verificação em **{proxima}s**")
+    
+    time.sleep(1)
     st.rerun()
 
 else:
@@ -576,8 +594,8 @@ if res_brk_painel["sinal_ativo"] or st.session_state.brk_grupo_ativo:
     grupo_ativo = res_brk_painel["grupo_confirmado"] if res_brk_painel["sinal_ativo"] else st.session_state.brk_grupo_ativo
     rest = res_brk_painel.get("rodadas_restantes", st.session_state.brk_rodadas_contagem)
     st.markdown(f"""
-    <div style="padding:16px; border-radius:10px; background:{cores_grupos[grupo_ativo]}20; border:3px solid {cores_grupos[grupo_ativo]};">
-        <h3 style="margin:0; color:{cores_grupos[grupo_ativo]};">✅ {nomes_grupos[grupo_ativo]} — ATIVO!</h3>
+    <div style="padding:16px; border-radius:10px; background:{cores_grupos.get(grupo_ativo, '#FFF')}20; border:3px solid {cores_grupos.get(grupo_ativo, '#000')};">
+        <h3 style="margin:0; color:{cores_grupos.get(grupo_ativo, '#000')};">✅ {nomes_grupos.get(grupo_ativo, 'GRUPO')} — ATIVO!</h3>
         <p>Gatilho: mesma dezena em rodadas consecutivas</p>
     </div>""", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
@@ -590,7 +608,7 @@ if res_brk_painel["sinal_ativo"] or st.session_state.brk_grupo_ativo:
         cob = res_brk_painel.get("cobertura", [])
         st.code(f"{cob}" if cob else "Nenhum apareceu ainda")
     st.metric("⏱️ Rodadas Restantes", rest)
-    st.progress(rest/4)
+    st.progress(min(max(rest / 4.0, 0.0), 1.0))
 else:
     st.info("⏳ Aguardando gatilho: mesma dezena em 2 rodadas seguidas.")
     ga, gb, gc = st.columns(3)
@@ -743,8 +761,7 @@ if st.session_state.sinal_ativo:
     🔢 Total de alvos: **{len(alvos_exibidos)}**
     """)
 
-    # Exibição visual dos números alvo com cores
-    cols_alvos = st.columns(len(alvos_exibidos))
+    cols_alvos = st.columns(len(alvos_exibidos)) if alvos_exibidos else []
     for idx, num in enumerate(alvos_exibidos):
         with cols_alvos[idx]:
             if num == 0:
@@ -782,7 +799,6 @@ if st.session_state.ultimo_resultado:
 else:
     st.info("Nenhum resultado registrado ainda.")
 
-# Estatísticas simples do histórico
 if len(st.session_state.historico) > 0:
     total_rodadas = len(st.session_state.historico)
     ultimo_numero = st.session_state.historico[0]
