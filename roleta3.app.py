@@ -283,37 +283,45 @@ def aplicar_filtro_tiro_certo_e_headshot(sub_historico, res_brk, puxadores, inve
 # INTEGRAÇÃO API
 # ==========================================
 def buscar_dados_roleta_url(roleta_nome):
-    url = URLS_ROLETAS.get(roleta_nome)
-    if not url:
+    url_base = URLS_ROLETAS.get(roleta_nome)
+    if not url_base:
         return []
+    
+    # ✅ Adiciona os parâmetros que a API exige (timezone + anti-cache)
+    import uuid
+    cb = str(uuid.uuid4())
+    url = f"{url_base}&timezone=America%2FSao_Paulo&_cb={cb}"
+    
     try:
         session = requests.Session()
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer": "https://www.tipminer.com/",
             "Origin": "https://www.tipminer.com",
-            "Referer": "https://www.tipminer.com/"
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-site"
         }
-        resp = session.get(url, headers=headers, timeout=6)
+        resp = session.get(url, headers=headers, timeout=10)
+        
         if resp.status_code == 200:
             dados = resp.json()
-            if isinstance(dados, dict):
-                dados = dados.get("result", dados.get("data", dados.get("results", [])))
+            # ✅ Extrai os números do formato real da API (result: valor)
             numeros = []
             if isinstance(dados, list):
                 for item in dados:
                     if isinstance(item, dict):
-                        val = item.get("result", item.get("number", item.get("value")))
+                        val = item.get("result")
                         if val is not None and isinstance(val, (int, float)):
                             numeros.append(int(val))
-                    elif isinstance(item, (int, float)):
-                        numeros.append(int(item))
             return numeros[:200]
         else:
-            st.sidebar.warning(f"API retornou status: {resp.status_code}")
+            st.sidebar.warning(f"API Status: {resp.status_code}")
             return []
     except Exception as e:
-        st.sidebar.warning(f"Erro na API: {str(e)[:60]}...")
+        st.sidebar.warning(f"Erro: {str(e)[:80]}")
         return []
 
 # ==========================================
