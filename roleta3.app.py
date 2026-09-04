@@ -536,22 +536,49 @@ filtro_hibrido_opcao = st.sidebar.selectbox(
 st.sidebar.markdown("---")
 
 # ==========================================
-# EXECUÇÃO DO MODO
+# EXECUÇÃO DO MODO + ✅ ATUALIZAÇÃO AUTOMÁTICA CORRIGIDA
 # ==========================================
 if modo_operacao == "On-line (Captura Automática)":
+    st.markdown("🔄 **Modo Automático Ativo — Verificando a cada 15s...**")
+    
     agora = time.time()
     if agora - st.session_state.ultima_busca_api > 15:
-        novos_dados = buscar_dados_roleta_url(roleta_selecionada)
         st.session_state.ultima_busca_api = agora
-        if novos_dados:
+        novos_dados = buscar_dados_roleta_url(roleta_selecionada)
+        
+        if novos_dados and len(novos_dados) > 0:
             st.session_state.erros_consecutivos_api = 0
-            st.sidebar.success(f"🟢 Conectado: **{roleta_selecionada}**")
-            if novos_dados != st.session_state.historico:
-                processar_novo_numero(novos_dados[0], roleta_selecionada, filtro_hibrido_opcao, None)
+            st.sidebar.success(f"🟢 Conectado: **{roleta_selecionada}** — {len(novos_dados)} rodadas")
+
+            # ✅ CORREÇÃO: Compara APENAS o último número sorteado
+            ultimo_novo = novos_dados[0]
+            ultimo_atual = st.session_state.historico[0] if st.session_state.historico else None
+
+            if ultimo_atual is not None and ultimo_novo != ultimo_atual:
+                # 🆕 Número REALMENTE novo detectado
+                st.success(f"🆕 NOVO NÚMERO → **{ultimo_novo}**")
+                processar_novo_numero(ultimo_novo, roleta_selecionada, filtro_hibrido_opcao, None)
                 st.session_state.historico = novos_dados
+                st.rerun()
+
+            # Primeira carga — sem histórico ainda
+            if ultimo_atual is None:
+                st.session_state.historico = novos_dados
+                st.rerun()
         else:
             st.session_state.erros_consecutivos_api += 1
-            st.sidebar.warning(f"🟡 Tentando reconectar... ({st.session_state.erros_consecutivos_api})")
+            st.sidebar.warning(f"🟡 Falha na busca ({st.session_state.erros_consecutivos_api}/5)")
+            if st.session_state.erros_consecutivos_api >= 5:
+                st.error("🔌 Muitas falhas — verifique conexão ou API")
+
+    # ⏳ Contador visual
+    proxima = max(0, 15 - int(time.time() - st.session_state.ultima_busca_api))
+    st.info(f"⏳ Próxima verificação em **{proxima}s**")
+
+    # 🔄 Auto-refresh
+    time.sleep(15)
+    st.rerun()
+
 else:
     st.sidebar.warning(f"🟠 Modo Manual: **{roleta_selecionada}**")
     with st.sidebar.form(key="form_manual", clear_on_submit=True):
@@ -560,7 +587,7 @@ else:
             processar_novo_numero(num_input, roleta_selecionada, filtro_hibrido_opcao, None)
             st.rerun()
     if st.sidebar.button("🧹 Limpar Histórico"):
-        for k in st.session_state:
+        for k in list(st.session_state.keys()):
             del st.session_state[k]
         st.rerun()
 
