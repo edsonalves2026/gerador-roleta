@@ -1,4 +1,3 @@
-
 import time
 import uuid
 import requests
@@ -466,11 +465,11 @@ filtro_hibrido_opcao = st.sidebar.selectbox(
 st.sidebar.markdown("---")
 
 # ==========================================
-# REQUISIÇÃO API / CAPTURA — CORRIGIDA SEM TRAVAMENTO
+# REQUISIÇÃO API / CAPTURA — CORRIGIDA
 # ==========================================
 if modo_operacao == "On-line (Captura Automática)":
     agora = time.time()
-    if agora - st.session_state.ultima_busca_api > 15:
+    if agora - st.session_state.ultima_busca_api >= 15:
         st.session_state.ultima_busca_api = agora
         novos_dados = buscar_dados_roleta_url(roleta_selecionada)
 
@@ -491,7 +490,7 @@ if modo_operacao == "On-line (Captura Automática)":
 
     proxima = max(0, 15 - int(time.time() - st.session_state.ultima_busca_api))
     st.info(f"🔄 Modo Automático — Próxima verificação em **{proxima}s**")
-    st.caption("A página atualiza automaticamente apenas quando houver novo número.")
+    st.caption("A página atualiza automaticamente verificando novos números.")
 
 else:
     st.sidebar.warning(f"🟠 Modo Manual: **{roleta_selecionada}**")
@@ -855,8 +854,9 @@ st.caption("""
 🔄 Atualização automática a cada 15s | 🤖 Alertas via Telegram | v3.0 Otimizado
 """)
 
-# Auto-refresh controlado (apenas no modo automático, sem sleep infinito)
+# ==========================================
+# AUTO-REFRESH CONTROLADO
+# ==========================================
 if modo_operacao == "On-line (Captura Automática)":
-    pass
-    # ⚠️ Removido st.rerun() automático contínuo para evitar travamento
-    # A página atualiza apenas quando houver novo número detectado
+    time.sleep(5)
+    st.rerun()
