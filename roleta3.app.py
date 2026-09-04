@@ -742,6 +742,7 @@ if st.session_state.ultimo_resultado:
 # ==========================================
 # MAPEAMENTO ANALÍTICO
 # ==========================================
+
 if st.session_state.historico:
     st.markdown("---")
     esteira_14 = st.session_state.historico[:14]
@@ -762,6 +763,7 @@ if st.session_state.historico:
         esteira_14, historico_200, dados_brk_in,
         puxadores_dict, {}, vizinhos_fisi_dict, quentes_100
     )
+
     dados_tabela = []
     for idx, num in enumerate(esteira_14):
         sub_hist = list(reversed(st.session_state.historico[idx:]))
@@ -773,4 +775,107 @@ if st.session_state.historico:
         sugestao = res_tiro_certo["status_nome"] if idx == 0 else res.get("status", "AGUARDAR")
         if res_tiro_certo["alvos_headshot"] and idx == 0:
             sugestao += f": {[int(x) for x in res_tiro_certo['alvos_headshot']]}"
-        elif res_t
+        elif res_tiro_certo["alvos_tiro_certo"] and idx == 0:
+            sugestao += f": {[int(x) for x in res_tiro_certo['alvos_tiro_certo']]}"
+
+        dados_tabela.append({
+            "Posição": f"Pos {idx+1}",
+            "Número": num,
+            "Esq 2/Esq 1": res.get("esquerda", "-"),
+            "Dir 1/Dir 2": res.get("direita", "-"),
+            "Puxadores": res.get("puxadores", "-"),
+            "Camuflados": res.get("camuflados", "-"),
+            "Inversão": res.get("inversao", "-"),
+            "Racetrack": res.get("racetrack", "-"),
+            "Confirmações": res.get("confirmacoes", "-"),
+            "Score": res.get("score", "0/5"),
+            "Sugestão": sugestao,
+            "Ativações": ", ".join(sorted(ativacoes_num)) if ativacoes_num else "-"
+        })
+
+    df_mapeamento = pd.DataFrame(dados_tabela)
+    st.subheader("📊 Mapeamento Analítico — Imersão Completa")
+    st.dataframe(df_mapeamento, use_container_width=True, hide_index=True)
+
+    # ==========================================
+    # ESTATÍSTICAS DAS RODADAS
+    # ==========================================
+    st.markdown("---")
+    st.subheader("📈 Estatísticas das Rodadas (Quentes/Frias, Avançada, Últimas 200)")
+
+    ultimas_200 = st.session_state.historico[:200]
+    qtd = len(ultimas_200)
+    col_est1, col_est2, col_est3 = st.columns(3)
+
+    with col_est1:
+        st.markdown("### 🔥 QUENTES / FRIAS")
+        if qtd >= 10:
+            serie_nums = pd.Series(ultimas_200)
+            contagem = serie_nums.value_counts().reindex(range(37), fill_value=0)
+            quentes = contagem.sort_values(ascending=False).head(12)
+            frias = contagem.sort_values(ascending=True).head(12)
+
+            fig_quefr = go.Figure(data=[
+                go.Bar(name='Mais Sorteados', x=quentes.index, y=quentes.values, marker_color='#FF6B6B'),
+                go.Bar(name='Menos Sorteados', x=frias.index, y=frias.values, marker_color='#4ECDC4')
+            ])
+            fig_quefr.update_layout(barmode='group', height=300, margin=dict(l=10, r=10, t=30, b=10))
+            st.plotly_chart(fig_quefr, use_container_width=True)
+        else:
+            st.info(f"Ainda não há dados suficientes ({qtd}/10)")
+
+    with col_est2:
+        st.markdown("### 📐 AVANÇADA")
+        if qtd >= 12:
+            estat = calcular_estatisticas(ultimas_200)
+            fig_avan = go.Figure(data=[
+                go.Bar(name='Dúzia 1-12', x=['D1'], y=[estat.get('d1', 0)]),
+                go.Bar(name='Dúzia 13-24', x=['D2'], y=[estat.get('d2', 0)]),
+                go.Bar(name='Dúzia 25-36', x=['D3'], y=[estat.get('d3', 0)]),
+                go.Bar(name='Coluna 1', x=['C1'], y=[estat.get('c1', 0)]),
+                go.Bar(name='Coluna 2', x=['C2'], y=[estat.get('c2', 0)]),
+                go.Bar(name='Coluna 3', x=['C3'], y=[estat.get('c3', 0)]),
+                go.Bar(name='Pares', x=['Par'], y=[estat.get('par', 0)]),
+                go.Bar(name='Ímpares', x=['Ímpar'], y=[estat.get('impar', 0)]),
+                go.Bar(name='Baixas 1-18', x=['Baixa'], y=[estat.get('baixas', 0)]),
+                go.Bar(name='Altas 19-36', x=['Alta'], y=[estat.get('altas', 0)]),
+            ])
+            fig_avan.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=10), showlegend=False)
+            st.plotly_chart(fig_avan, use_container_width=True)
+        else:
+            st.info(f"Ainda não há dados suficientes ({qtd}/12)")
+
+    with col_est3:
+        st.markdown("### 📋 ÚLTIMAS 200")
+        if qtd > 0:
+            linhas = []
+            for i in range(0, min(qtd, 200), 10):
+                bloco = ultimas_200[i:i+10]
+                html_bloco = "<div style='display:flex;gap:3px;margin:2px 0;'>"
+                for n in bloco:
+                    cor = "#FF4444" if n in NUMEROS_VERMELHOS else "#222222" if n == 0 else "#2266FF"
+                    html_bloco += f"<span style='background-color:{cor};color:white;border-radius:4px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;'>{n}</span>"
+                html_bloco += "</div>"
+                linhas.append(html_bloco)
+            st.markdown("".join(linhas), unsafe_allow_html=True)
+        else:
+            st.info("Aguardando dados...")
+
+    # ==========================================
+    # SINAL ATIVO — ÁREA DE APOSTA
+    # ==========================================
+    st.markdown("---")
+    if st.session_state.sinal_ativo:
+        st.subheader("⚠️ SINAL ATIVO — AGUARDANDO ACERTO")
+        st.info(f"🎰 Roleta: **{roleta_selecionada}**")
+        st.warning(f"🎲 Alvos para apostar: **{st.session_state.alvos_sinal}**")
+        st.caption(f"🔄 Tentativa atual: {st.session_state.tentativa_atual + 1}/3 | Aposta direta nos alvos")
+    else:
+        st.subheader("✅ Sem sinal ativo — Aguardando gatilhos...")
+        st.caption("Quando o Score ≥ 4/4, o sinal é disparado e enviado ao Telegram automaticamente.")
+
+# ==========================================
+# RODAPÉ
+# ==========================================
+st.markdown("---")
+st.caption("⚡ Sistema de Análise e Sinais — Radar de Roleta Pro | BRK_OURO integrado | Atualizado em tempo real")
