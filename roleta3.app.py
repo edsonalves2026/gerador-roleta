@@ -536,7 +536,7 @@ filtro_hibrido_opcao = st.sidebar.selectbox(
 st.sidebar.markdown("---")
 
 # ==========================================
-# EXECUÇÃO DO MODO + ✅ ATUALIZAÇÃO AUTOMÁTICA CORRIGIDA
+# ✅ MODO AUTOMÁTICO CORRIGIDO — Sem tela travada
 # ==========================================
 if modo_operacao == "On-line (Captura Automática)":
     st.markdown("🔄 **Modo Automático Ativo — Verificando a cada 15s...**")
@@ -550,18 +550,17 @@ if modo_operacao == "On-line (Captura Automática)":
             st.session_state.erros_consecutivos_api = 0
             st.sidebar.success(f"🟢 Conectado: **{roleta_selecionada}** — {len(novos_dados)} rodadas")
 
-            # ✅ CORREÇÃO: Compara APENAS o último número sorteado
             ultimo_novo = novos_dados[0]
             ultimo_atual = st.session_state.historico[0] if st.session_state.historico else None
 
+            # ✅ Número novo detectado
             if ultimo_atual is not None and ultimo_novo != ultimo_atual:
-                # 🆕 Número REALMENTE novo detectado
                 st.success(f"🆕 NOVO NÚMERO → **{ultimo_novo}**")
                 processar_novo_numero(ultimo_novo, roleta_selecionada, filtro_hibrido_opcao, None)
                 st.session_state.historico = novos_dados
                 st.rerun()
 
-            # Primeira carga — sem histórico ainda
+            # ✅ Primeira carga — carrega tudo de uma vez
             if ultimo_atual is None:
                 st.session_state.historico = novos_dados
                 st.rerun()
@@ -571,12 +570,11 @@ if modo_operacao == "On-line (Captura Automática)":
             if st.session_state.erros_consecutivos_api >= 5:
                 st.error("🔌 Muitas falhas — verifique conexão ou API")
 
-    # ⏳ Contador visual
+    # ⏳ Contador — SEM travamento de tela
     proxima = max(0, 15 - int(time.time() - st.session_state.ultima_busca_api))
     st.info(f"⏳ Próxima verificação em **{proxima}s**")
 
-    # 🔄 Auto-refresh
-    time.sleep(15)
+    # 🔄 Recarrega sem travar
     st.rerun()
 
 else:
