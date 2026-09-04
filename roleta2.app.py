@@ -735,7 +735,7 @@ if st.session_state.historico:
 # ==========================================
 # 9. ESTATÍSTICAS E PAINEL VISUAL
 # ==========================================
-if st.session_state.historico:
+if st.session_state.get("historico"):
     st.markdown("---")
     st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 200)")
     
