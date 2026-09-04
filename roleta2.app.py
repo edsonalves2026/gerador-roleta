@@ -1,6 +1,3 @@
-==========================================
-# IMPORTS E CONFIGURAÇÕES INICIAIS
-# ==========================================
 
 import time
 import requests
