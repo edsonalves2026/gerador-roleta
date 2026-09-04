@@ -1,4 +1,5 @@
 import time
+import uuid
 import requests
 import pandas as pd
 import numpy as np
@@ -158,24 +159,13 @@ def calcular_estatisticas(amostra):
     }
 
 # ==========================================
-# 🎯 FILTRO TIRO CERTO + HEAD-SHOT (NOVO)
+# 🎯 FILTRO TIRO CERTO + HEAD-SHOT
 # ==========================================
 def aplicar_filtro_tiro_certo_e_headshot(sub_historico, res_brk, puxadores, invertido, vizinhos, quentes_100):
-    """
-    Motor de afunilamento com pontuação ponderada em camadas:
-    1. BRK Ausente (+3.0) / Cobertura (+1.5)
-    2. Puxador Top1 (+2.5), Top2 (+1.5)
-    3. Inversão (+1.5)
-    4. Vizinhos (+1.0)
-    5. Quente 100R (+1.0)
-    6. Posição 13 (+1.0)
-    7. Bônus Convergência 2F (+2.0 por cruzamento)
-    """
     pontuacao_numeros = {n: 0.0 for n in range(0, 37)}
     detalhe_pesos = {n: {} for n in range(0, 37)}
     origem_filtros = []
 
-    # 1. BRK — Ausentes (Prioridade Máxima) e Cobertura
     brk_ausentes = res_brk.get("prioridade_maxima", [])
     brk_cobertura = res_brk.get("cobertura", [])
     for n in brk_ausentes:
@@ -187,7 +177,6 @@ def aplicar_filtro_tiro_certo_e_headshot(sub_historico, res_brk, puxadores, inve
     if brk_ausentes or brk_cobertura:
         origem_filtros.append("BRK")
 
-    # 2. Puxadores — Top 1 e Top 2
     if puxadores:
         pontuacao_numeros[puxadores[0]] += 2.5
         detalhe_pesos[puxadores[0]]["Px top 1"] = 2.5
@@ -196,32 +185,27 @@ def aplicar_filtro_tiro_certo_e_headshot(sub_historico, res_brk, puxadores, inve
             detalhe_pesos[puxadores[1]]["Px top 2"] = 1.5
         origem_filtros.append("Puxador")
 
-    # 3. Inversão de Dezena
     if invertido is not None:
         pontuacao_numeros[invertido] += 1.5
         detalhe_pesos[invertido]["Inversão"] = 1.5
         origem_filtros.append("Inversão")
 
-    # 4. Vizinhos de Mesa
     viz_list = [vizinhos.get("esq_1"), vizinhos.get("dir_1")]
     for n in viz_list:
         if n is not None:
             pontuacao_numeros[n] += 1.0
             detalhe_pesos[n]["Vizinhos"] = 1.0
 
-    # 5. Quente nas últimas 100 rodadas
     for n in range(0, 37):
         if pontuacao_numeros[n] > 0 and n in quentes_100:
             pontuacao_numeros[n] += 1.0
             detalhe_pesos[n]["+Quente 100R"] = 1.0
 
-    # 6. Posição 13 da Esteira
     if len(sub_historico) >= 13:
         pos13 = sub_historico[-13]
         pontuacao_numeros[pos13] += 1.0
         detalhe_pesos[pos13]["Ult 13"] = 1.0
 
-    # BÔNUS CONVERGÊNCIA 2F: Aparece em ≥2 filtros → +2.0 por cruzamento
     todos_candidatos = brk_ausentes + brk_cobertura + (puxadores[:2] if puxadores else []) + ([invertido] if invertido else []) + [n for n in viz_list if n]
     frequencia = Counter(todos_candidatos)
     for n, qtd in frequencia.items():
@@ -230,34 +214,25 @@ def aplicar_filtro_tiro_certo_e_headshot(sub_historico, res_brk, puxadores, inve
             pontuacao_numeros[n] += bonus
             detalhe_pesos[n][f"2F×{qtd}"] = bonus
 
-    # Ordena por Score Final
     numeros_ordenados = sorted(pontuacao_numeros.items(), key=lambda x: x[1], reverse=True)
-
-    # 🎯 SELEÇÃO TIRO CERTO — Top 7 com Score ≥ 3.0
     alvos_tiro_certo = [num for num, score in numeros_ordenados if score >= 3.0][:7]
 
-    # 💥 SELEÇÃO HEAD-SHOT — Maturação BRK + Micro-Tendência (30 rodadas)
     amostra_30 = sub_historico[-30:] if len(sub_historico) >= 30 else sub_historico
     amostra_5 = sub_historico[-5:] if len(sub_historico) >= 5 else sub_historico
-
     dezenas_ouro = []
     for num in alvos_tiro_certo:
         score_num = pontuacao_numeros[num]
         estava_ativa_30 = num in amostra_30
         nao_saiu_ultimas_5 = num not in amostra_5
-
         eh_brk_ausente = num in brk_ausentes
         eh_brk_cobertura_quente = (num in brk_cobertura) and estava_ativa_30
-
         passou_maturacao = eh_brk_ausente or eh_brk_cobertura_quente
-
         if score_num >= 7.5 and passou_maturacao and nao_saiu_ultimas_5:
             dezenas_ouro.append(num)
 
     alvos_headshot = sorted(dezenas_ouro[:4])
     tem_headshot = len(alvos_headshot) >= 2
 
-    # Nomeclatura da Assinatura
     assinatura = "+".join(sorted(set(origem_filtros))) if origem_filtros else "Convergência"
     if tem_headshot:
         status_nome = f"💥 HEAD-SHOT [{assinatura}] Score≥7.5"
@@ -280,18 +255,16 @@ def aplicar_filtro_tiro_certo_e_headshot(sub_historico, res_brk, puxadores, inve
     }
 
 # ==========================================
-# INTEGRAÇÃO API
+# INTEGRAÇÃO API — CORRIGIDA COM CABEÇALHOS
 # ==========================================
 def buscar_dados_roleta_url(roleta_nome):
     url_base = URLS_ROLETAS.get(roleta_nome)
     if not url_base:
         return []
-    
-    # ✅ Adiciona os parâmetros que a API exige (timezone + anti-cache)
-    import uuid
+
     cb = str(uuid.uuid4())
     url = f"{url_base}&timezone=America%2FSao_Paulo&_cb={cb}"
-    
+
     try:
         session = requests.Session()
         headers = {
@@ -305,10 +278,9 @@ def buscar_dados_roleta_url(roleta_nome):
             "Sec-Fetch-Site": "same-site"
         }
         resp = session.get(url, headers=headers, timeout=10)
-        
+
         if resp.status_code == 200:
             dados = resp.json()
-            # ✅ Extrai os números do formato real da API (result: valor)
             numeros = []
             if isinstance(dados, list):
                 for item in dados:
@@ -445,8 +417,6 @@ def processar_novo_numero(num_novo, roleta_nome, filtro_opcao, modo_gale):
 
     if len(st.session_state.historico) >= 10:
         historico_cron = list(reversed(st.session_state.historico))
-
-        # ✅ VALIDAÇÃO APENAS NAS 3 ÚLTIMAS + POSIÇÃO 13
         janela_validacao = historico_cron[-3:] if len(historico_cron)>=3 else historico_cron
         if len(historico_cron)>=13:
             janela_validacao.append(historico_cron[-13])
@@ -507,19 +477,10 @@ def processar_novo_numero(num_novo, roleta_nome, filtro_opcao, modo_gale):
                 st.session_state.alvos_sinal = alvos_para_usar
                 st.session_state.tentativa_atual = 0
 
-                # 🚨 TELEGRAM DISPARA APENAS NO HEAD-SHOT (Score ≥ 7.5)
                 if res_tiro["tem_headshot"]:
-                    enviar_alerta_telegram(
-                        ultimo, f"{score_val:.1f}/7.5", alvos_para_usar,
-                        padrao, roleta_nome=roleta_nome,
-                        tier_nome=tier_do_padrao, posicao_rank=posicao_rank, taxa_acerto=taxa_acerto
-                    )
+                    enviar_alerta_telegram(ultimo, f"{score_val:.1f}/7.5", alvos_para_usar, padrao, roleta_nome=roleta_nome, tier_nome=tier_do_padrao, posicao_rank=posicao_rank, taxa_acerto=taxa_acerto)
                 elif score_val >= 5.0:
-                    enviar_alerta_telegram(
-                        ultimo, f"{score_val:.1f}/7.5", alvos_para_usar,
-                        padrao, roleta_nome=roleta_nome,
-                        tier_nome=tier_do_padrao, posicao_rank=posicao_rank, taxa_acerto=taxa_acerto
-                    )
+                    enviar_alerta_telegram(ultimo, f"{score_val:.1f}/7.5", alvos_para_usar, padrao, roleta_nome=roleta_nome, tier_nome=tier_do_padrao, posicao_rank=posicao_rank, taxa_acerto=taxa_acerto)
 
     st.session_state.historico.insert(0, num_novo)
 
@@ -544,16 +505,16 @@ filtro_hibrido_opcao = st.sidebar.selectbox(
 st.sidebar.markdown("---")
 
 # ==========================================
-# ✅ MODO AUTOMÁTICO CORRIGIDO — Sem tela travada
+# ✅ MODO AUTOMÁTICO — CORRIGIDO E SEM TRAVAMENTO
 # ==========================================
 if modo_operacao == "On-line (Captura Automática)":
     st.markdown("🔄 **Modo Automático Ativo — Verificando a cada 15s...**")
-    
+
     agora = time.time()
     if agora - st.session_state.ultima_busca_api > 15:
         st.session_state.ultima_busca_api = agora
         novos_dados = buscar_dados_roleta_url(roleta_selecionada)
-        
+
         if novos_dados and len(novos_dados) > 0:
             st.session_state.erros_consecutivos_api = 0
             st.sidebar.success(f"🟢 Conectado: **{roleta_selecionada}** — {len(novos_dados)} rodadas")
@@ -561,14 +522,12 @@ if modo_operacao == "On-line (Captura Automática)":
             ultimo_novo = novos_dados[0]
             ultimo_atual = st.session_state.historico[0] if st.session_state.historico else None
 
-            # ✅ Número novo detectado
             if ultimo_atual is not None and ultimo_novo != ultimo_atual:
                 st.success(f"🆕 NOVO NÚMERO → **{ultimo_novo}**")
                 processar_novo_numero(ultimo_novo, roleta_selecionada, filtro_hibrido_opcao, None)
                 st.session_state.historico = novos_dados
                 st.rerun()
 
-            # ✅ Primeira carga — carrega tudo de uma vez
             if ultimo_atual is None:
                 st.session_state.historico = novos_dados
                 st.rerun()
@@ -578,11 +537,8 @@ if modo_operacao == "On-line (Captura Automática)":
             if st.session_state.erros_consecutivos_api >= 5:
                 st.error("🔌 Muitas falhas — verifique conexão ou API")
 
-    # ⏳ Contador — SEM travamento de tela
     proxima = max(0, 15 - int(time.time() - st.session_state.ultima_busca_api))
     st.info(f"⏳ Próxima verificação em **{proxima}s**")
-
-    # 🔄 Recarrega sem travar
     st.rerun()
 
 else:
@@ -610,7 +566,11 @@ else:
     res_brk_painel = {"sinal_ativo": False}
 
 cores_grupos = {"GRUPO_A": "#FFD700", "GRUPO_B": "#00C853", "GRUPO_C": "#2196F3"}
-nomes_grupos = {"GRUPO_A": "🟡 GRUPO A — Termina em 1,2,3", "GRUPO_B": "🟢 GRUPO B — Termina em 4,5,6", "GRUPO_C": "🔵 GRUPO C — Termina em 7,8,9,0"}
+nomes_grupos = {
+    "GRUPO_A": "🟡 GRUPO A — Termina em 1,2,3",
+    "GRUPO_B": "🟢 GRUPO B — Termina em 4,5,6",
+    "GRUPO_C": "🔵 GRUPO C — Termina em 7,8,9,0"
+}
 
 if res_brk_painel["sinal_ativo"] or st.session_state.brk_grupo_ativo:
     grupo_ativo = res_brk_painel["grupo_confirmado"] if res_brk_painel["sinal_ativo"] else st.session_state.brk_grupo_ativo
@@ -679,7 +639,6 @@ if len(st.session_state.historico) >= 10:
     else:
         st.warning("⏳ Aguardando convergência mínima (Score ≥ 3.0, mínimo 4 alvos)")
 
-    # Tabela detalhada dos pesos
     st.subheader("📋 Detalhamento dos Pesos por Número Candidato")
     linhas = []
     for num in res_tiro_map["alvos_tiro_certo"]:
@@ -707,6 +666,7 @@ if st.session_state.historico:
     ultimas = st.session_state.historico[:200]
     qtd = len(ultimas)
     c1, c2, c3 = st.columns(3)
+
     with c1:
         st.markdown("### 🔥 Quentes / Frias")
         if qtd >= 10:
@@ -766,20 +726,17 @@ if st.session_state.historico:
 # ==========================================
 st.markdown("---")
 st.subheader("🚨 SINAL ATIVO — Área de Aposta")
-
 if st.session_state.sinal_ativo:
     alvos_exibidos = st.session_state.alvos_sinal
     tentativa = st.session_state.tentativa_atual
     etapa_nome = {0: "Entrada Direta", 1: "Gale 1 (G1)", 2: "Gale 2 (G2)"}.get(tentativa, f"Gale {tentativa}")
-
     st.warning(f"""
     ⚠️ **SINAL DISPARADO — {etapa_nome}**
     🎰 Roleta: **{roleta_selecionada}**
     🎲 Alvos sugeridos: **{alvos_exibidos}**
-    ➕ Proteção no Zero: **{0}**
+    ➕ Proteção no Zero: **0**
     🔄 Tentativa: {tentativa + 1}/3
     """)
-
     col1, col2 = st.columns(2)
     with col1:
         if st.button("📤 Reenviar alerta ao Telegram", type="primary"):
@@ -839,33 +796,31 @@ st.markdown("---")
 with st.expander("📖 Manual do Sistema — Pesos e Regras de Filtro"):
     st.markdown("""
     ### 🎯 Sistema de Pontuação Ponderada
-
     | Filtro | Peso | Descrição |
     |---|---|---|
-    | **Ausente (BRK)** | **+3.0** | Número que falta fechar o ciclo do grupo BRK |
-    | **Px top 1** | **+2.5** | Primeiro puxador da matriz de transição |
-    | **2F Convergência** | **+2.0** | Número apontado por 2+ filtros simultâneos |
-    | **Px top 2** | **+1.5** | Segundo puxador da matriz |
-    | **Inversão** | **+1.5** | Inversão da dezena do último número sorteado |
-    | **+Quente 100R** | **+1.0** | Está entre os mais frequentes nas últimas 100 rodadas |
-    | **Vizinhos** | **+1.0** | Vizinhos físicos do último número no cilindro |
-    | **Ult 13** | **+1.0** | Número na 13ª posição da esteira |
+    | **Ausente (BRK)** | **+3.0** | Número que falta para completar o grupo BRK |
+    | **Px top 1** | **+2.5** | Primeiro número mais frequente após o último |
+    | **2F Convergência** | **+2.0** | Número aparece em 2+ filtros simultâneos |
+    | **Px top 2** | **+1.5** | Segundo número mais frequente |
+    | **Inversão** | **+1.5** | Dezena invertida do último número sorteado |
+    | **+Quente 100R** | **+1.0** | Está entre os 10 mais sorteados nas últimas 100 |
+    | **Vizinhos** | **+1.0** | Vizinhos imediatos do último número |
+    | **Última 13ª posição** | **+1.0** | Número que apareceu na posição 13 |
 
     ### 🏅 Níveis de Score
-
-    | Score | Classificação | Ação |
+    | Score | Classificação | Ação Sugerida |
     |---|---|---|
-    | **≥ 7.5** | 💥 HEAD-SHOT | Entrada imediata — máximo confiança |
-    | **5.0 a 7.0** | 🎯 TIRO CERTO | Entrada padrão — boa convergência |
-    | **3.0 a 4.5** | ⏳ Aguardar | Pontuação insuficiente |
+    | **≥ 7.5** | 💥 HEAD-SHOT | Entrada imediata — máxima confiança |
+    | **5.0 a 7.4** | 🎯 TIRO CERTO | Entrada padrão — boa convergência |
+    | **3.0 a 4.9** | ⏳ Observação | Pontuação insuficiente |
     | **< 3.0** | ❌ Descartado | Sem relevância estatística |
 
     ### 🔒 Regras de Corte Final
-    - Apenas **3 últimas posições + posição 13** geram candidatos (demais são ruído)
+    - Apenas **3 últimas posições + posição 13** geram candidatos (reduz ruído)
     - **Máximo 7 alvos** no TIRO CERTO
     - **Máximo 4 alvos** no HEAD-SHOT (apenas os mais fortes)
-    - BRK Ausente → aprovação direta no HEAD-SHOT
-    - BRK Já saiu → só aprova se ativo nas últimas 30 rodadas
+    - BRK Ausente → aprovação direta para HEAD-SHOT
+    - BRK Já saiu → aprova apenas se ativo nas últimas 30 rodadas
     - Telegram dispara **apenas em Score ≥ 7.5 (HEAD-SHOT)** ou ≥ 5.0 com filtro liberado
     """)
 
@@ -878,3 +833,4 @@ st.caption("""
 ✅ Validação: 3 últimas posições + posição 13 da esteira | ✅ Máximo 7 alvos (TIRO CERTO) / 4 alvos (HEAD-SHOT)
 ✅ BRK com Maturação Condicional | ✅ Ranking de Assertividade por Padrão
 """)
+
