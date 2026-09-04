@@ -735,10 +735,20 @@ if st.session_state.historico:
 # ==========================================
 # 9. ESTATÍSTICAS E PAINEL VISUAL
 # ==========================================
+
+# 1. FUNÇÃO APENAS PARA DADOS
+def processar_novo_numero(num_novo):
+    if "historico" not in st.session_state:
+        st.session_state.historico = []
+    
+    st.session_state.historico.insert(0, num_novo)
+
+
+# 2. PAINEL VISUAL NO FLUXO PRINCIPAL (Sem indentação de def)
 if st.session_state.get("historico"):
     st.markdown("---")
     st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 200)")
-    
+
     total_disponivel = len(st.session_state.historico)
     max_amostra = min(200, total_disponivel)
     qtd_rodadas = st.slider(
@@ -748,13 +758,14 @@ if st.session_state.get("historico"):
         value=max_amostra,
         step=5
     )
-    
+
     amostra = list(reversed(st.session_state.historico[:qtd_rodadas]))
     total_amostra = len(amostra)
-    
+
     col_g1, col_g2, col_g3 = st.columns(3)
-    
+
     with col_g1:
+        # ... Resto do seu código dos gráficos
         st.markdown("### 📊 QUENTES/FRIOS")
         contagem = pd.Series(amostra).value_counts()
         quentes = contagem.head(5).index.tolist()
