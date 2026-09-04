@@ -52,15 +52,12 @@ GRUPO_OCULTO_BRK = {
     "GRUPO_C": [7, 8, 9, 10, 17, 18, 19, 20, 27, 28, 29, 30]
 }
 
-# Endpoints base higienizados sem query strings hardcoded
 URLS_ROLETAS = {
     "XXXtreme Lightning": "https://api.core.public.tipminer.com/v1/roulette/rounds/e640b7c7-aaba-4ffa-a678-6b6872898162/history",
     "Roleta Brasileira": "https://api.core.public.tipminer.com/v1/roulette/rounds/45d12dd3-8f85-4ab2-8c86-4eaea7967e10/history",
     "Immersive Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-f3703302d5cc/history",
     "Swedish Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-40d2-b479-a28a01c6ee13/history"
 }
-
-VIZINHOS_ZERO = [1, 5, 8, 11, 14, 23, 26, 32]
 
 # ==========================================
 # FUNÇÕES AUXILIARES
@@ -82,18 +79,6 @@ def obter_dezena_invertida(num):
         return None
     inv = int(str(num)[::-1])
     return inv if inv <= 36 else None
-
-def obter_camuflados(num):
-    inv = obter_dezena_invertida(num)
-    viz = obter_vizinhos_mesa(num)
-    camu = set()
-    if inv is not None:
-        camu.add(inv)
-    if viz["esq_1"] is not None:
-        camu.add(viz["esq_1"])
-    if viz["dir_1"] is not None:
-        camu.add(viz["dir_1"])
-    return sorted(list(camu))
 
 def obter_puxadores_otimizados(ultimo, sub_historico):
     base_puxadores = TABELA_PUXADORES_FIXA.get(ultimo, [])
@@ -136,17 +121,6 @@ def validar_gatilho_sequencial_brk(sub_historico):
         }
     return {"sinal_ativo": False}
 
-def checar_estrategia_fantasma(sub_historico):
-    if len(sub_historico) < 5:
-        return {"status": "INATIVO"}
-    ultimos_5 = sub_historico[-5:]
-    seis_duzias = [n for n in ultimos_5 if n != 0]
-    if len(seis_duzias) == 5:
-        duzias = [(n-1)//12 for n in seis_duzias]
-        if len(set(duzias)) == 1:
-            return {"status": "ATIVADO", "principais": ultimos_5[-2:]}
-    return {"status": "INATIVO"}
-
 def calcular_estatisticas(amostra):
     total = len(amostra)
     if total == 0:
@@ -165,9 +139,6 @@ def calcular_estatisticas(amostra):
         "total": total
     }
 
-# ==========================================
-# 🎯 FILTRO TIRO CERTO + HEAD-SHOT
-# ==========================================
 def aplicar_filtro_tiro_certo_e_headshot(sub_historico, res_brk, puxadores, invertido, vizinhos, quentes_100):
     pontuacao_numeros = {n: 0.0 for n in range(0, 37)}
     detalhe_pesos = {n: {} for n in range(0, 37)}
@@ -262,7 +233,7 @@ def aplicar_filtro_tiro_certo_e_headshot(sub_historico, res_brk, puxadores, inve
     }
 
 # ==========================================
-# INTEGRAÇÃO API — OTIMIZADA E ESTRUTURADA
+# INTEGRAÇÃO API
 # ==========================================
 def buscar_dados_roleta_url(roleta_nome):
     url_base = URLS_ROLETAS.get(roleta_nome)
@@ -278,25 +249,16 @@ def buscar_dados_roleta_url(roleta_nome):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
         "Referer": "https://www.tipminer.com/",
-        "Origin": "https://www.tipminer.com",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-site"
+        "Origin": "https://www.tipminer.com"
     }
 
     try:
-        session = requests.Session()
-        resp = session.get(url_base, params=params, headers=headers, timeout=10)
-
+        resp = requests.get(url_base, params=params, headers=headers, timeout=10)
         if resp.status_code == 200:
             dados = resp.json()
             numeros = []
-            
-            # Tratamento adaptativo caso o retorno seja dict {'data': [...]} ou list direto
             itens = dados.get("data", dados) if isinstance(dados, dict) else dados
-            
             if isinstance(itens, list):
                 for item in itens:
                     if isinstance(item, dict):
@@ -304,11 +266,8 @@ def buscar_dados_roleta_url(roleta_nome):
                         if val is not None and isinstance(val, (int, float)):
                             numeros.append(int(val))
             return numeros[:200]
-        else:
-            st.sidebar.warning(f"API Status: {resp.status_code}")
-            return []
-    except Exception as e:
-        st.sidebar.warning(f"Erro ao buscar API: {str(e)[:80]}")
+        return []
+    except Exception:
         return []
 
 # ==========================================
@@ -316,12 +275,12 @@ def buscar_dados_roleta_url(roleta_nome):
 # ==========================================
 def enviar_mensagem_telegram(texto):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        return False, "Credenciais do Telegram não configuradas."
+        return False, "Credenciais ausentes."
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": texto, "parse_mode": "Markdown"}
     try:
         r = requests.post(url, json=payload, timeout=5)
-        return r.status_code == 200, "Mensagem enviada com sucesso!"
+        return r.status_code == 200, "OK"
     except Exception as e:
         return False, str(e)
 
@@ -332,7 +291,7 @@ def enviar_alerta_telegram(ultimo, score, alvos, padroes, roleta_nome="Desconhec
         f"🚨 *SINAL DISPARADO* 🚨\n\n"
         f"🎰 *Roleta:* `{roleta_nome}`\n"
         f"🎲 *Último Número:* `{ultimo}`\n"
-        f"🔥 *Score do Sinal:* `{score}`\n"
+        f"🔥 *Score:* `{score}`\n"
         f"🏆 *Tier:* `{tier_nome}` (Rank: {pos_str} | Assertividade: {taxa_str})\n"
         f"🎯 *Alvos Sugeridos:* `{alvos}`\n"
         f"📋 *Padrão:* {padroes}"
@@ -396,15 +355,12 @@ st.title("🎯 Radar de Roleta Pro — TIRO CERTO + HEAD-SHOT")
 for chave, padrao in [
     ("historico", []), ("sinal_ativo", False), ("alvos_sinal", []),
     ("tentativa_atual", 0), ("ultimo_resultado", None), ("ultima_busca_api", 0),
-    ("erros_consecutivos_api", 0), ("brk_rodadas_contagem", 0), ("brk_grupo_ativo", None)
+    ("brk_rodadas_contagem", 0), ("brk_grupo_ativo", None)
 ]:
     if chave not in st.session_state:
         st.session_state[chave] = padrao
 
-# ==========================================
-# PROCESSAMENTO DE NOVO NÚMERO
-# ==========================================
-def processar_novo_numero(num_novo, roleta_nome, filtro_opcao, modo_gale):
+def processar_novo_numero(num_novo, roleta_nome, filtro_opcao):
     if st.session_state.brk_grupo_ativo:
         st.session_state.brk_rodadas_contagem -= 1
         if st.session_state.brk_rodadas_contagem <= 0:
@@ -432,10 +388,6 @@ def processar_novo_numero(num_novo, roleta_nome, filtro_opcao, modo_gale):
 
     if len(st.session_state.historico) >= 10:
         historico_cron = list(reversed(st.session_state.historico))
-        janela_validacao = historico_cron[-3:] if len(historico_cron)>=3 else historico_cron
-        if len(historico_cron)>=13:
-            janela_validacao.append(historico_cron[-13])
-
         res_brk = validar_gatilho_sequencial_brk(historico_cron)
         if res_brk["sinal_ativo"]:
             st.session_state.brk_grupo_ativo = res_brk["grupo_confirmado"]
@@ -492,10 +444,7 @@ def processar_novo_numero(num_novo, roleta_nome, filtro_opcao, modo_gale):
                 st.session_state.alvos_sinal = alvos_para_usar
                 st.session_state.tentativa_atual = 0
 
-                if res_tiro["tem_headshot"]:
-                    enviar_alerta_telegram(ultimo, f"{score_val:.1f}/7.5", alvos_para_usar, padrao, roleta_nome=roleta_nome, tier_nome=tier_do_padrao, posicao_rank=posicao_rank, taxa_acerto=taxa_acerto)
-                elif score_val >= 5.0:
-                    enviar_alerta_telegram(ultimo, f"{score_val:.1f}/7.5", alvos_para_usar, padrao, roleta_nome=roleta_nome, tier_nome=tier_do_padrao, posicao_rank=posicao_rank, taxa_acerto=taxa_acerto)
+                enviar_alerta_telegram(ultimo, f"{score_val:.1f}/7.5", alvos_para_usar, padrao, roleta_nome=roleta_nome, tier_nome=tier_do_padrao, posicao_rank=posicao_rank, taxa_acerto=taxa_acerto)
 
     st.session_state.historico.insert(0, num_novo)
 
@@ -506,7 +455,6 @@ st.sidebar.header("🕹️ Painel de Operação")
 modo_operacao = st.sidebar.selectbox("🌐 Modo de Operação:", ["On-line (Captura Automática)", "Off-line (Digitação Manual)"])
 roleta_selecionada = st.sidebar.selectbox("🎰 Selecionar Roleta:", list(URLS_ROLETAS.keys()))
 st.sidebar.markdown("---")
-st.sidebar.subheader("🎛️ Filtro Híbrido de Assertividade")
 filtro_hibrido_opcao = st.sidebar.selectbox(
     "Nível de Filtragem dos Sinais:",
     [
@@ -520,56 +468,60 @@ filtro_hibrido_opcao = st.sidebar.selectbox(
 st.sidebar.markdown("---")
 
 # ==========================================
-# MODO AUTOMÁTICO - CORRIGIDO SEM TRAVAMENTO
+# REQUISIÇÃO API / CAPTURA AUTOMÁTICA
 # ==========================================
 if modo_operacao == "On-line (Captura Automática)":
-    st.markdown("🔄 **Modo Automático Ativo — Verificando a cada 15s...**")
-
     agora = time.time()
-    if agora - st.session_state.ultima_busca_api > 15:
+    if agora - st.session_state.ultima_busca_api > 12:
         st.session_state.ultima_busca_api = agora
         novos_dados = buscar_dados_roleta_url(roleta_selecionada)
 
-        if novos_dados and len(novos_dados) > 0:
-            st.session_state.erros_consecutivos_api = 0
-            st.sidebar.success(f"🟢 Conectado: **{roleta_selecionada}** — {len(novos_dados)} rodadas")
-
+        if novos_dados:
             ultimo_novo = novos_dados[0]
             ultimo_atual = st.session_state.historico[0] if st.session_state.historico else None
 
             if ultimo_atual is not None and ultimo_novo != ultimo_atual:
-                st.success(f"🆕 NOVO NÚMERO → **{ultimo_novo}**")
-                processar_novo_numero(ultimo_novo, roleta_selecionada, filtro_hibrido_opcao, None)
+                processar_novo_numero(ultimo_novo, roleta_selecionada, filtro_hibrido_opcao)
                 st.session_state.historico = novos_dados
                 st.rerun()
 
             if ultimo_atual is None:
                 st.session_state.historico = novos_dados
-                st.rerun()
-        else:
-            st.session_state.erros_consecutivos_api += 1
-            st.sidebar.warning(f"🟡 Falha na busca ({st.session_state.erros_consecutivos_api}/5)")
-            if st.session_state.erros_consecutivos_api >= 5:
-                st.error("🔌 Muitas falhas — verifique a conexão ou os parâmetros da API.")
 
-    tempo_passado = int(time.time() - st.session_state.ultima_busca_api)
-    proxima = max(0, 15 - tempo_passado)
-    st.info(f"⏳ Próxima verificação em **{proxima}s**")
-    
-    time.sleep(1)
-    st.rerun()
+    st.sidebar.success(f"🟢 Conectado: **{roleta_selecionada}** — {len(st.session_state.historico)} rodadas")
+    st.info("🔄 **Modo Automático Ativo** — Atualizando a página dinamicamente...")
 
 else:
     st.sidebar.warning(f"🟠 Modo Manual: **{roleta_selecionada}**")
     with st.sidebar.form(key="form_manual", clear_on_submit=True):
         num_input = st.number_input("Número Sorteado:", 0, 36, step=1)
         if st.form_submit_button("➕ Adicionar"):
-            processar_novo_numero(num_input, roleta_selecionada, filtro_hibrido_opcao, None)
+            processar_novo_numero(num_input, roleta_selecionada, filtro_hibrido_opcao)
             st.rerun()
     if st.sidebar.button("🧹 Limpar Histórico"):
         for k in list(st.session_state.keys()):
             del st.session_state[k]
         st.rerun()
+
+# ==========================================
+# 🚨 SINAL ATIVO — ÁREA DE APOSTA
+# ==========================================
+st.markdown("---")
+st.subheader("🚨 SINAL ATIVO — Área de Aposta")
+
+if st.session_state.sinal_ativo:
+    alvos_exibidos = st.session_state.alvos_sinal
+    tentativa = st.session_state.tentativa_atual
+    etapa_nome = {0: "🎯 Entrada Direta", 1: "📈 Gale 1 (G1)", 2: "📊 Gale 2 (G2)"}.get(tentativa, f"🔄 Tentativa {tentativa}")
+
+    st.warning(f"⚠️ **SINAL DISPARADO — {etapa_nome}** | Roleta: **{roleta_selecionada}** | Alvos: **{alvos_exibidos}**")
+    cols_alvos = st.columns(len(alvos_exibidos)) if alvos_exibidos else []
+    for idx, num in enumerate(alvos_exibidos):
+        with cols_alvos[idx]:
+            bg_cor = "#00AA00" if num == 0 else ("#FF2222" if num in NUMEROS_VERMELHOS else "#000000")
+            st.markdown(f"<div style='background-color:{bg_cor}; color:#FFF; border-radius:8px; padding:15px; text-align:center; font-size:22px; font-weight:bold;'>{num}</div>", unsafe_allow_html=True)
+else:
+    st.success("✅ Nenhum sinal ativo no momento — Aguardando padrões...")
 
 # ==========================================
 # 🏆 PAINEL BRK_OURO
@@ -608,13 +560,8 @@ if res_brk_painel["sinal_ativo"] or st.session_state.brk_grupo_ativo:
         cob = res_brk_painel.get("cobertura", [])
         st.code(f"{cob}" if cob else "Nenhum apareceu ainda")
     st.metric("⏱️ Rodadas Restantes", rest)
-    st.progress(min(max(rest / 4.0, 0.0), 1.0))
 else:
     st.info("⏳ Aguardando gatilho: mesma dezena em 2 rodadas seguidas.")
-    ga, gb, gc = st.columns(3)
-    ga.markdown("🟡 **A:** 1,2,3,11,12,13,21,22,23,31,32,33")
-    gb.markdown("🟢 **B:** 4,5,6,14,15,16,24,25,26,34,35,36")
-    gc.markdown("🔵 **C:** 7,8,9,10,17,18,19,20,27,28,29,30")
 
 # ==========================================
 # ESTEIRA TEMPORAL
@@ -631,7 +578,7 @@ else:
     st.info("Aguardando dados...")
 
 # ==========================================
-# 📊 MAPEAMENTO ANALÍTICO COM SCORE PONDERADO
+# 📊 MAPEAMENTO ANALÍTICO
 # ==========================================
 st.markdown("---")
 st.header("📊 MAPEAMENTO ANALÍTICO — Score Ponderado 🔥")
@@ -647,17 +594,6 @@ if len(st.session_state.historico) >= 10:
     quentes_100_map = set(pd.Series(amostra_100_map).value_counts().head(10).index.tolist())
     res_tiro_map = aplicar_filtro_tiro_certo_e_headshot(h_cron, res_brk_map, puxadores_map, inv_map, viz_map, quentes_100_map)
 
-    st.subheader("🎯 Resultado TIRO CERTO / HEAD-SHOT")
-    if res_tiro_map["tem_headshot"]:
-        st.success(f"💥 **HEAD-SHOT ATIVO!** {res_tiro_map['nome_padrao']}")
-        st.code(f"Alvos: {res_tiro_map['alvos_headshot']}  |  Score: {res_tiro_map['top_score']:.1f}/7.5")
-    elif res_tiro_map["sinal_ativo"]:
-        st.info(f"🎯 TIRO CERTO — {res_tiro_map['nome_padrao']}")
-        st.code(f"Alvos: {res_tiro_map['alvos_tiro_certo']}  |  Score: {res_tiro_map['top_score']:.1f}/7.5")
-    else:
-        st.warning("⏳ Aguardando convergência mínima (Score ≥ 3.0, mínimo 4 alvos)")
-
-    st.subheader("📋 Detalhamento dos Pesos por Número Candidato")
     linhas = []
     for num in res_tiro_map["alvos_tiro_certo"]:
         pesos = res_tiro_map["detalhe_pesos"].get(num, {})
@@ -666,10 +602,8 @@ if len(st.session_state.historico) >= 10:
             "Número": num,
             "Ausente (+3.0)": pesos.get("Ausente", "-"),
             "Px top 1 (+2.5)": pesos.get("Px top 1", "-"),
-            "2F Convergência": next((v for k,v in pesos.items() if k.startswith("2F")), "-"),
             "+Quente 100R (+1.0)": pesos.get("+Quente 100R", "-"),
             "Vizinhos (+1.0)": pesos.get("Vizinhos", "-"),
-            "Ult 13 (+1.0)": pesos.get("Ult 13", "-"),
             "Score Final 🔥": f"{score_final:.1f}"
         })
     if linhas:
@@ -687,188 +621,39 @@ if st.session_state.historico:
 
     with c1:
         st.markdown("### 🔥 Quentes / Frias")
-        if qtd >= 10:
-            cont = pd.Series(ultimas).value_counts().reindex(range(37), fill_value=0)
-            quentes = cont.sort_values(ascending=False).head(12)
-            frias = cont.sort_values(ascending=True).head(12)
-            fig = go.Figure([
-                go.Bar(name='Mais Sorteados', x=quentes.index, y=quentes.values, marker_color='#FF4444'),
-                go.Bar(name='Menos Sorteados', x=frias.index, y=frias.values, marker_color='#4488FF')
-            ])
-            fig.update_layout(barmode='group', height=300, margin=dict(l=10, r=10, t=30, b=10), showlegend=True)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info(f"Dados insuficientes ({qtd}/10)")
+        cont = pd.Series(ultimas).value_counts().reindex(range(37), fill_value=0)
+        quentes = cont.sort_values(ascending=False).head(12)
+        frias = cont.sort_values(ascending=True).head(12)
+        fig = go.Figure([
+            go.Bar(name='Mais Sorteados', x=quentes.index, y=quentes.values, marker_color='#FF4444'),
+            go.Bar(name='Menos Sorteados', x=frias.index, y=frias.values, marker_color='#4488FF')
+        ])
+        fig.update_layout(barmode='group', height=300, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig, use_container_width=True)
 
     with c2:
-        st.markdown("### 📐 Dúzias / Colunas / Paridade")
-        if qtd >= 12:
-            est = calcular_estatisticas(ultimas)
-            categorias = ['D1\n1-12', 'D2\n13-24', 'D3\n25-36', 'C1', 'C2', 'C3', 'Pares', 'Ímpares', 'Baixas\n1-18', 'Altas\n19-36']
-            valores = [
-                est.get('d1', 0), est.get('d2', 0), est.get('d3', 0),
-                est.get('c1', 0), est.get('c2', 0), est.get('c3', 0),
-                est.get('par', 0), est.get('impar', 0),
-                est.get('baixas', 0), est.get('altas', 0)
-            ]
-            cores = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#2ECC71', '#E74C3C', '#3498DB', '#E67E22']
-            fig2 = go.Figure(data=[go.Bar(x=categorias, y=valores, marker_color=cores)])
-            fig2.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=60), showlegend=False)
-            st.plotly_chart(fig2, use_container_width=True)
-        else:
-            st.info(f"Dados insuficientes ({qtd}/12)")
+        st.markdown("### 📐 Dúzias / Colunas")
+        est = calcular_estatisticas(ultimas)
+        categorias = ['D1', 'D2', 'D3', 'C1', 'C2', 'C3', 'Pares', 'Ímpares']
+        valores = [est.get('d1',0), est.get('d2',0), est.get('d3',0), est.get('c1',0), est.get('c2',0), est.get('c3',0), est.get('par',0), est.get('impar',0)]
+        fig2 = go.Figure(data=[go.Bar(x=categorias, y=valores)])
+        fig2.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig2, use_container_width=True)
 
     with c3:
-        st.markdown("### 🎨 Mapa de Cores — Últimas 200")
-        if qtd > 0:
-            linhas_html = []
-            for i in range(0, qtd, 10):
-                bloco = ultimas[i:i+10]
-                html_bloco = "<div style='display:flex;gap:4px;margin:3px 0;'>"
-                for n in bloco:
-                    if n == 0:
-                        bg_cor = "#00AA00"
-                    elif n in NUMEROS_VERMELHOS:
-                        bg_cor = "#FF2222"
-                    else:
-                        bg_cor = "#000000"
-                    html_bloco += f"<span style='background-color:{bg_cor};color:#FFF;border-radius:4px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;'>{n}</span>"
-                html_bloco += "</div>"
-                linhas_html.append(html_bloco)
-            st.markdown("".join(linhas_html), unsafe_allow_html=True)
-        else:
-            st.info("Aguardando dados...")
+        st.markdown("### 🎨 Mapa de Cores")
+        linhas_html = []
+        for i in range(0, min(qtd, 50), 10):
+            bloco = ultimas[i:i+10]
+            html_bloco = "<div style='display:flex;gap:4px;margin:3px 0;'>"
+            for n in bloco:
+                bg_cor = "#00AA00" if n == 0 else ("#FF2222" if n in NUMEROS_VERMELHOS else "#000000")
+                html_bloco += f"<span style='background-color:{bg_cor};color:#FFF;border-radius:4px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;'>{n}</span>"
+            html_bloco += "</div>"
+            linhas_html.append(html_bloco)
+        st.markdown("".join(linhas_html), unsafe_allow_html=True)
 
-# ==========================================
-# 🚨 SINAL ATIVO — ÁREA DE APOSTA
-# ==========================================
-st.markdown("---")
-st.subheader("🚨 SINAL ATIVO — Área de Aposta")
-
-if st.session_state.sinal_ativo:
-    alvos_exibidos = st.session_state.alvos_sinal
-    tentativa = st.session_state.tentativa_atual
-    etapa_nome = {
-        0: "🎯 Entrada Direta",
-        1: "📈 Gale 1 (G1)",
-        2: "📊 Gale 2 (G2)"
-    }.get(tentativa, f"🔄 Tentativa {tentativa}")
-
-    st.warning(f"""
-    ⚠️ **SINAL DISPARADO — {etapa_nome}**
-    🎰 Roleta: **{roleta_selecionada}**
-    🎲 Números Alvo: **{alvos_exibidos}**
-    🔢 Total de alvos: **{len(alvos_exibidos)}**
-    """)
-
-    cols_alvos = st.columns(len(alvos_exibidos)) if alvos_exibidos else []
-    for idx, num in enumerate(alvos_exibidos):
-        with cols_alvos[idx]:
-            if num == 0:
-                cor_fundo = "#00AA00"
-            elif num in NUMEROS_VERMELHOS:
-                cor_fundo = "#FF2222"
-            else:
-                cor_fundo = "#000000"
-            st.markdown(f"""
-            <div style="background-color:{cor_fundo}; color:#FFF; border-radius:8px; 
-                        padding:15px; text-align:center; font-size:22px; font-weight:bold;
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
-                {num}
-            </div>
-            """, unsafe_allow_html=True)
-
-    st.info("""
-    💡 **Regras de Aposta:**
-    - ✅ Se sair **qualquer número alvo ou o 0** → **GREEN** (Sinal encerrado)
-    - ❌ Se errar → avança para a próxima etapa (Gale)
-    - 🔄 Após 3 tentativas sem acerto → **LOSS** (Sinal encerrado)
-    """)
-
-else:
-    st.success("✅ Nenhum sinal ativo no momento — Aguardando padrões...")
-
-# ==========================================
-# 📊 HISTÓRICO DE RESULTADOS
-# ==========================================
-st.markdown("---")
-st.subheader("📊 Histórico de Resultados")
-
-if st.session_state.ultimo_resultado:
-    st.markdown(f"**Último Resultado:** {st.session_state.ultimo_resultado}")
-else:
-    st.info("Nenhum resultado registrado ainda.")
-
-if len(st.session_state.historico) > 0:
-    total_rodadas = len(st.session_state.historico)
-    ultimo_numero = st.session_state.historico[0]
-    st.markdown(f"""
-    📋 **Resumo:**
-    - Total de rodadas registradas: **{total_rodadas}**
-    - Último número sorteado: **{ultimo_numero}**
-    - Status do sinal: **{'🔴 ATIVO' if st.session_state.sinal_ativo else '🟢 Inativo'}**
-    """)
-
-# ==========================================
-# 🏆 RANKING DE PADRÕES
-# ==========================================
-st.markdown("---")
-st.subheader("🏆 Ranking de Padrões — Taxa de Acerto")
-
-tiers, df_rank = obter_tiers_cache()
-if not df_rank.empty:
-    st.dataframe(df_rank, use_container_width=True, hide_index=True)
-else:
-    st.info("Dados insuficientes para gerar ranking de padrões (mínimo 20 rodadas necessárias)")
-
-# ==========================================
-# 📋 MANUAL DO SISTEMA
-# ==========================================
-st.markdown("---")
-with st.expander("📖 Manual Completo do Sistema — Regras e Funcionamento", expanded=False):
-    st.markdown("""
-    ### 🎯 Sistema TIRO CERTO + HEAD-SHOT
-
-    **Objetivo:** Identificar padrões estatísticos e sugerir números com maior probabilidade de sair.
-
-    ---
-    ### 📐 Critérios de Pontuação
-    | Critério | Pontuação |
-    |---|---|
-    | Número ausente no grupo BRK | +3.0 |
-    | Primeiro número mais frequente | +2.5 |
-    | Segundo número mais frequente | +1.5 |
-    | Número invertido | +1.5 |
-    | Vizinhos imediatos | +1.0 cada |
-    | Número quente (últimos 100) | +1.0 |
-    | Número da posição 13 | +1.0 |
-    | Convergência de múltiplos critérios | +2.0 por critério extra |
-
-    **Limiares:**
-    - Score ≥ 3.0 → TIRO CERTO (mínimo 4 alvos)
-    - Score ≥ 7.5 + maturação → HEAD-SHOT
-
-    ---
-    ### 🟢 Regras de Acerto
-    - Acertou → **GREEN** ✅ (sinal encerrado)
-    - Errou → avança para **G1**, depois **G2**
-    - 3 erros seguidos → **LOSS** ❌
-
-    ---
-    ### 🎛️ Níveis de Filtro
-    - **Desativado:** emite todos os sinais detectados
-    - **🥉 Radar:** apenas padrões do Top 30
-    - **🥈 Seleção:** apenas padrões do Top 10
-    - **🥇 Ouro:** apenas padrões do Top 5
-    - **👑 Elite:** apenas padrões do Top 3 (maior precisão)
-    """)
-
-# ==========================================
-# RODAPÉ
-# ==========================================
-st.markdown("---")
-st.caption("""
-⚡ Radar de Roleta Pro — Sistema TIRO CERTO + HEAD-SHOT com Score Ponderado
-✅ Validação BRK + Padrões Históricos + Ranking de Assertividade
-🔄 Atualização automática a cada 15 segundos | 🔔 Alertas via Telegram
-""")
+# Auto-refresh controlado
+if modo_operacao == "On-line (Captura Automática)":
+    time.sleep(5)
+    st.rerun()
