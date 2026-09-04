@@ -6,7 +6,7 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 
-# A primeira instrução executável do Streamlit DEVE ser set_page_config
+# Configuração da página Streamlit
 st.set_page_config(page_title="Radar de Roleta Pro", layout="wide")
 
 TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
@@ -56,7 +56,7 @@ URLS_ROLETAS = {
 }
 
 # ==========================================
-# 2. FUNÇÕES AUXILIARES E INTEGRAÇÃO API
+# 2. FUNÇÕES AUXILIARES E API
 # ==========================================
 
 def obter_vizinhos_mesa(num):
@@ -80,7 +80,6 @@ def obter_camuflados(num):
     inv = obter_dezena_invertida(num)
     viz = obter_vizinhos_mesa(num)
     camu = set()
-    
     if inv is not None:
         camu.add(inv)
     camu.update([viz["esq_1"], viz["dir_1"]])
@@ -88,13 +87,11 @@ def obter_camuflados(num):
 
 def obter_puxadores_otimizados(ultimo, sub_historico):
     base_puxadores = TABELA_PUXADORES_FIXA.get(ultimo, [])
-    
     if len(sub_historico) >= 30:
         ocorrencias = [
             sub_historico[i+1] for i in range(len(sub_historico)-1)
             if sub_historico[i] == ultimo
         ]
-
         if ocorrencias:
             mais_frequente = pd.Series(ocorrencias).mode()
             if not mais_frequente.empty:
@@ -303,7 +300,7 @@ def obter_tiers_cache():
     return st.session_state["tier_cache"], st.session_state["df_rank_cache"]
 
 # ==========================================
-# 6. MOTOR DE SCORAGE (ATUALIZADO COM BRK)
+# 6. MOTOR DE SCORAGE
 # ==========================================
 
 def analisar_rodada_especifica(sub_historico, houve_troca=False):
@@ -337,7 +334,7 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     if fantasma["status"] == "ATIVADO":
         score += 1
         filtros_ativos.append("Fantasma")
-        alvos.update(fantasma["principais"]) # CORRIGIDO: Parêntese fechado aqui
+        alvos.update(fantasma["principais"])
     vizinhos_zero = [1, 5, 8, 11, 14, 23, 26, 32]
     if houve_troca and ultimo in vizinhos_zero:
         score += 1
@@ -388,7 +385,7 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     }
 
 # ==========================================
-# 7. INTERFACE STREAMLIT - ESTADO INICIAL
+# 7. ESTADO INICIAL E PAINEL LATERAL
 # ==========================================
 st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
@@ -403,7 +400,6 @@ if "tentativa_atual" not in st.session_state:
 if "ultimo_resultado" not in st.session_state:
     st.session_state.ultimo_resultado = None
 
-# Painel Lateral
 st.sidebar.header("🕹️ Painel de Operação")
 modo_operacao = st.sidebar.selectbox(
     "🌐 Modo de Operação:",
@@ -439,7 +435,7 @@ modo_gale_opcao = st.sidebar.radio(
 st.sidebar.markdown("---")
 
 # ==========================================
-# PROCESSAMENTO DE NOVO NÚMERO
+# PROCESSAMENTO DE NOVO NÚMERO E SINAIS
 # ==========================================
 def processar_novo_numero(num_novo):
     if st.session_state.sinal_ativo:
@@ -500,12 +496,10 @@ def processar_novo_numero(num_novo):
             elif filtro_hibrido_opcao == "👑 Elite (Top 3 - Máxima Precisão)" and tier_do_padrao == "👑 Elite (Top 3)":
                 permitido = True
 
-            # Gestão do Sinal (Novo x Fusão no Gale)
             if permitido:
                 if st.session_state.sinal_ativo:
                     if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
                         alvos_novos_brutos = [n for n in res_ultimo["alvos"] if n not in st.session_state.alvos_sinal]
-                        
                         if res_ultimo.get("dados_brk", {}).get("sinal_ativo"):
                             prioridades = res_ultimo["dados_brk"].get("prioridade_maxima", [])
                             alvos_novos_filtrados = [n for n in alvos_novos_brutos if n in prioridades]
@@ -516,11 +510,9 @@ def processar_novo_numero(num_novo):
 
                         limite_maximo_alvos = 8
                         vagas_disponiveis = limite_maximo_alvos - len(st.session_state.alvos_sinal)
-                        
                         if vagas_disponiveis > 0 and alvos_novos_filtrados:
                             alvos_para_adicionar = alvos_novos_filtrados[:vagas_disponiveis]
                             st.session_state.alvos_sinal.extend(alvos_para_adicionar)
-                            
                             enviar_mensagem_telegram(
                                 f"🔄 *FUSÃO AFUNILADA (GALE)*\n"
                                 f"🎰 Roleta: `{roleta_selecionada}`\n"
@@ -528,7 +520,6 @@ def processar_novo_numero(num_novo):
                                 f"🎯 Alvos Totais (Máx {limite_maximo_alvos}): `{st.session_state.alvos_sinal}`"
                             )
                 else:
-                    # Ativa Novo Sinal
                     st.session_state.sinal_ativo = True
                     st.session_state.alvos_sinal = res_ultimo["alvos"][:8]
                     st.session_state.tentativa_atual = 0
@@ -544,7 +535,7 @@ def processar_novo_numero(num_novo):
                         taxa_acerto=taxa_acerto
                     )
 
-# Execução do Modo de Operação
+# Execução da Entrada de Dados
 if modo_operacao == "On-line (Captura Automática)":
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
     if novos_dados:
@@ -555,10 +546,8 @@ if modo_operacao == "On-line (Captura Automática)":
             st.session_state.historico = novos_dados
     else:
         st.sidebar.warning(f"🟡 Tentando reconectar à **{roleta_selecionada}**...")
-
 else:
     st.sidebar.warning(f"🟠 Modo Manual ativo: **{roleta_selecionada}**")
-    
     with st.sidebar.form(key="form_entrada_manual", clear_on_submit=True):
         novo_numero_input = st.number_input(
             "Número Sorteado (Manual):", 
@@ -569,7 +558,6 @@ else:
             placeholder="Digite de 0 a 36 e tecle Enter"
         )
         submetido = st.form_submit_button("➕ Adicionar Número (Enter)")
-        
         if submetido and novo_numero_input is not None:
             num = int(novo_numero_input)
             processar_novo_numero(num)
@@ -587,7 +575,7 @@ else:
                 del st.session_state[chave]
         st.rerun()
 
-# Visualização Principal
+# Esteira Visual
 st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
 if st.session_state.historico:
     esteira = st.session_state.historico[:14]
@@ -598,22 +586,19 @@ if st.session_state.historico:
 else:
     st.info("Aguardando captura do primeiro sorteio na mesa...")
 
-# ALERTA EXCLUSIVO BRK
+# Alerta BRK
 if st.session_state.historico and len(st.session_state.historico) >= 2:
     historico_cronologico = list(reversed(st.session_state.historico))
     res_brk_painel = validar_gatilho_sequencial_brk(historico_cronologico)
-    
     if res_brk_painel["sinal_ativo"]:
         st.markdown("---")
         st.success(f"🎯 **GATILHO OCULTO BRK CONFIRMADO PARA O GRUPO {res_brk_painel['grupo_confirmado']}!**")
         st.markdown(f"**Validação:** A dezena recente `{res_brk_painel['dezena_gatilho']}` confirmou a dezena anterior `{res_brk_painel['dezena_confirmada']}`.")
-        
         c_prio, c_cob = st.columns(2)
         with c_prio:
             st.error(f"🔥 **PRIORIDADE MÁXIMA (Ainda não saíram nas 200 rodadas):**\n\n`{res_brk_painel['prioridade_maxima']}`")
         with c_cob:
             st.warning(f"🛡️ **COBERTURA (Já saíram no histórico):**\n\n`{res_brk_painel['cobertura']}`")
-        st.info("⏱️ **Estratégia Recomendada:** Manter apostas neste grupo pelas próximas **3 a 4 rodadas**.")
 
 if st.session_state.ultimo_resultado:
     if "GREEN" in st.session_state.ultimo_resultado:
@@ -622,7 +607,7 @@ if st.session_state.ultimo_resultado:
         st.error(f"⚠️ Resultado do Último Sinal: **{st.session_state.ultimo_resultado}**")
 
 # ==========================================
-# 8. MAPEAMENTO ANALÍTICO (TIRO CERTO & HEAD-SHOT)
+# 8. MAPEAMENTO ANALÍTICO (CORRIGIDO E PADRONIZADO)
 # ==========================================
 if st.session_state.historico:
     st.markdown("---")
@@ -660,21 +645,21 @@ if st.session_state.historico:
     for idx, num in enumerate(esteira_14):
         sub_hist = list(reversed(st.session_state.historico[idx:]))
         res = analisar_rodada_especifica(sub_hist)
-        
         ativacoes_num = res_tiro_certo["ativacoes"].get(num, set())
         
         dezenas_vizinhos = vizinhos_fisi_dict.get(num, [])
         puxs_lista = puxadores_dict.get(num, [])
         px_top1 = [puxs_lista[0]] if len(puxs_lista) > 0 else []
-        dezenas_ausentes = dados_brk_in["ausentes"] if num in dados_brk_in["ausentes"] else []
-        
-        sugestao = res_tiro_certo["status_nome"]
-        if res_tiro_certo["alvos_headshot"]:
-            alvos_limpos = [int(x) for x in res_tiro_certo["alvos_headshot"]]
-            sugestao += f": {alvos_limpos}"
-        elif res_tiro_certo["alvos_tiro_certo"]:
-            alvos_limpos = [int(x) for x in res_tiro_certo["alvos_tiro_certo"]]
-            sugestao += f": {alvos_limpos}"
+
+        # Padronização do Status/Sugestão unificado com o Score do Sinal
+        if res["score_num"] >= 4:
+            sugestao_texto = f"🚨 SINAL CONFIRMADO: {res['alvos']}"
+        elif res_tiro_certo["alvos_headshot"] and idx == 0:
+            sugestao_texto = f"🎯 HEAD-SHOT: {res_tiro_certo['alvos_headshot']}"
+        elif res_tiro_certo["alvos_tiro_certo"] and idx == 0:
+            sugestao_texto = f"🔥 TIRO CERTO: {res_tiro_certo['alvos_tiro_certo']}"
+        else:
+            sugestao_texto = "⚪ AGUARDAR"
 
         dados_tabela.append({
             "Último": res["ultimo"],
@@ -685,16 +670,15 @@ if st.session_state.historico:
             "Ausente (+3.0)": f"🟢 ({num})" if "Ausente" in ativacoes_num else "⚪",
             "Ult 13 (+1.0)": f"🟢 ({num})" if "Ult 13" in ativacoes_num else "⚪",
             "Score 🔥": f"{res_tiro_certo['detalhes_pesos'].get(num, 0.0):.1f}",
-            "Status / Sugestão": sugestao if idx == 0 else res["status"]
+            "Status / Sugestão": sugestao_texto
         })
     
     st.subheader(f"📊 Mapeamento Analítico - {roleta_selecionada}")
-    
     df_exibicao = pd.DataFrame(dados_tabela)
     df_exibicao.index = range(1, len(df_exibicao) + 1)
     st.dataframe(df_exibicao, use_container_width=True)
 
-    # Ranking dos Tiers
+    # Ranking de Padrões
     tiers_atuais, df_rank = obter_tiers_cache()
     with st.expander("🏆 Ranking dos Padrões (Assertividade ≥ 50% - Últimas 200 Rodadas)", expanded=False):
         if not df_rank.empty:
@@ -704,7 +688,7 @@ if st.session_state.historico:
         else:
             st.info("Nenhum padrão com no mínimo 50% de acerto foi consolidado ainda.")
 
-    # Alerta Manual
+    # Botão Reenviar Alerta para Telegram (com validação do filtro híbrido)
     historico_analise = list(reversed(st.session_state.historico))
     res_ultimo = analisar_rodada_especifica(historico_analise)
     if res_ultimo["score_num"] >= 4:
@@ -733,24 +717,15 @@ if st.session_state.historico:
                 st.error(msg)
 
 # ==========================================
-# 9. ESTATÍSTICAS E PAINEL VISUAL
+# 9. ESTATÍSTICAS E PAINEL VISUAL (ÚNICO E SEM DUPLICAÇÃO)
 # ==========================================
-
-# 1. FUNÇÃO APENAS PARA DADOS
-def processar_novo_numero(num_novo):
-    if "historico" not in st.session_state:
-        st.session_state.historico = []
-    
-    st.session_state.historico.insert(0, num_novo)
-
-
-# 2. PAINEL VISUAL NO FLUXO PRINCIPAL (Sem indentação de def)
 if st.session_state.get("historico"):
     st.markdown("---")
     st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 200)")
 
     total_disponivel = len(st.session_state.historico)
     max_amostra = min(200, total_disponivel)
+    
     qtd_rodadas = st.slider(
         "Selecione o tamanho da amostra (Últimas X rodadas):",
         min_value=min(10, total_disponivel),
@@ -765,7 +740,6 @@ if st.session_state.get("historico"):
     col_g1, col_g2, col_g3 = st.columns(3)
 
     with col_g1:
-        # ... Resto do seu código dos gráficos
         st.markdown("### 📊 QUENTES/FRIOS")
         contagem = pd.Series(amostra).value_counts()
         quentes = contagem.head(5).index.tolist()
@@ -792,7 +766,6 @@ if st.session_state.get("historico"):
         
         par = sum(1 for n in amostra if n > 0 and n % 2 == 0)
         impar = sum(1 for n in amostra if n % 2 != 0)
-        
         baixas = sum(1 for n in amostra if 1 <= n <= 18)
         altas = sum(1 for n in amostra if 19 <= n <= 36)
         
@@ -857,7 +830,7 @@ if st.session_state.get("historico"):
         )
         st.plotly_chart(fig_grid, use_container_width=True)
 
-# Loop de Recarregamento para Modo On-line
+# Loop de Recarrega Automático
 if modo_operacao == "On-line (Captura Automática)":
     time.sleep(5)
     st.rerun()
