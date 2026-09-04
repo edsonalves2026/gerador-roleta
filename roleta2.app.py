@@ -7,7 +7,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # A primeira instrução executável do Streamlit DEVE ser set_page_config
-
 st.set_page_config(page_title="Radar de Roleta Pro", layout="wide")
 
 TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
@@ -141,7 +140,7 @@ def checar_estrategia_fantasma(sub_historico):
         if len(set(duzias)) == 1:
             return {"status": "ATIVADO", "principais": ultimos_5[-2:]}
     return {"status": "INATIVO"}
-    
+
 def buscar_dados_roleta_url(roleta_nome):
     url = URLS_ROLETAS.get(roleta_nome)
     if not url:
@@ -179,7 +178,7 @@ def buscar_dados_roleta_url(roleta_nome):
 # ==========================================
 
 def enviar_mensagem_telegram(texto):
-    if TELEGRAM_BOT_TOKEN == "SEU_BOT_TOKEN_HERE":
+    if TELEGRAM_BOT_TOKEN == "SEU_BOT_TOKEN_HERE" or not TELEGRAM_BOT_TOKEN:
         return False, "Token do Bot não configurado."
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": texto, "parse_mode": "Markdown"}
@@ -202,6 +201,7 @@ def enviar_alerta_telegram(ultimo, score, alvos, padroes, roleta_nome="Desconhec
         f"📋 *Padrões Identificados:* {', '.join(padroes)}"
     )
     return enviar_mensagem_telegram(msg)
+
 def enviar_resultado_telegram(tipo, numero, etapa="", roleta_nome="Desconhecida"):
     emoji = "✅" if tipo == "GREEN" else "❌"
     msg = f"{emoji} *RESULTADO: {tipo}* {f'({etapa})' if etapa else ''}\n🎰 Roleta: `{roleta_nome}`\n🎲 Número Sorteado: `{numero}`"  
@@ -292,6 +292,7 @@ def classificar_padroes_200_rodadas(historico_completo):
         "RADAR_TOP_30": lista_ordenada[:30]
     }
     return tiers, estudo_ordenado
+
 def obter_tiers_cache():
     hist_atual = len(st.session_state.historico)
     if ("tier_cache" not in st.session_state or 
@@ -336,7 +337,7 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     if fantasma["status"] == "ATIVADO":
         score += 1
         filtros_ativos.append("Fantasma")
-        alvos.update(fantasma["principais"]
+        alvos.update(fantasma["principais"]) # CORRIGIDO: Parêntese fechado aqui
     vizinhos_zero = [1, 5, 8, 11, 14, 23, 26, 32]
     if houve_troca and ultimo in vizinhos_zero:
         score += 1
@@ -390,6 +391,7 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
 # 7. INTERFACE STREAMLIT - ESTADO INICIAL
 # ==========================================
 st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
+
 if "historico" not in st.session_state:
     st.session_state.historico = []
 if "sinal_ativo" not in st.session_state:
@@ -400,7 +402,7 @@ if "tentativa_atual" not in st.session_state:
     st.session_state.tentativa_atual = 0
 if "ultimo_resultado" not in st.session_state:
     st.session_state.ultimo_resultado = None
-    
+
 # Painel Lateral
 st.sidebar.header("🕹️ Painel de Operação")
 modo_operacao = st.sidebar.selectbox(
@@ -425,18 +427,16 @@ filtro_hibrido_opcao = st.sidebar.selectbox(
         "🥇 Seleção Ouro (Top 5 - Conservador)",
         "👑 Elite (Top 3 - Máxima Precisão)"
     ],
-    
     index=2
 )
 
 modo_gale_opcao = st.sidebar.radio(
     "Estratégia no Gale ao detectar novo Sinal Elite:",
     ["Opção A: Mantém Sinal A (Aposta Fixa)", "Opção B: Fusão de Alvos Únicos (A + B)"],
-
     index=1
 )
 
-st.sidebar.markdown("---") 
+st.sidebar.markdown("---")
 
 # ==========================================
 # PROCESSAMENTO DE NOVO NÚMERO
@@ -500,35 +500,49 @@ def processar_novo_numero(num_novo):
             elif filtro_hibrido_opcao == "👑 Elite (Top 3 - Máxima Precisão)" and tier_do_padrao == "👑 Elite (Top 3)":
                 permitido = True
 
-            # CORREÇÃO DE INDENTAÇÃO AQUI
-            if st.session_state.sinal_ativo:
-                if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
-                    # 1. Pega apenas alvos inéditos do novo sinal
-                    alvos_novos_brutos = [n for n in res_ultimo["alvos"] if n not in st.session_state.alvos_sinal]
-                    
-                    # 2. Se houver gatilho BRK, prioriza apenas as dezenas ausentes/Tiro Certo
-                    if res_ultimo.get("dados_brk", {}).get("sinal_ativo"):
-                        prioridades = res_ultimo["dados_brk"].get("prioridade_maxima", [])
-                        alvos_novos_filtrados = [n for n in alvos_novos_brutos if n in prioridades]
-                        if not alvos_novos_filtrados:
-                            alvos_novos_filtrados = alvos_novos_brutos[:2]
-                    else:
-                        alvos_novos_filtrados = alvos_novos_brutos[:3]
-
-                    # 3. Trava Rígida: Limita o TOTAL ABSOLUTO a no máximo 8 dezenas
-                    limite_maximo_alvos = 8
-                    vagas_disponiveis = limite_maximo_alvos - len(st.session_state.alvos_sinal)
-                    
-                    if vagas_disponiveis > 0 and alvos_novos_filtrados:
-                        alvos_para_adicionar = alvos_novos_filtrados[:vagas_disponiveis]
-                        st.session_state.alvos_sinal.extend(alvos_para_adicionar)
+            # Gestão do Sinal (Novo x Fusão no Gale)
+            if permitido:
+                if st.session_state.sinal_ativo:
+                    if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
+                        alvos_novos_brutos = [n for n in res_ultimo["alvos"] if n not in st.session_state.alvos_sinal]
                         
-                        enviar_mensagem_telegram(
-                            f"🔄 *FUSÃO AFUNILADA (GALE)*\n"
-                            f"🎰 Roleta: `{roleta_selecionada}`\n"
-                            f"Dezenas adicionadas: `{alvos_para_adicionar}`\n"
-                            f"🎯 Alvos Totais (Máx {limite_maximo_alvos}): `{st.session_state.alvos_sinal}`"
-                        )
+                        if res_ultimo.get("dados_brk", {}).get("sinal_ativo"):
+                            prioridades = res_ultimo["dados_brk"].get("prioridade_maxima", [])
+                            alvos_novos_filtrados = [n for n in alvos_novos_brutos if n in prioridades]
+                            if not alvos_novos_filtrados:
+                                alvos_novos_filtrados = alvos_novos_brutos[:2]
+                        else:
+                            alvos_novos_filtrados = alvos_novos_brutos[:3]
+
+                        limite_maximo_alvos = 8
+                        vagas_disponiveis = limite_maximo_alvos - len(st.session_state.alvos_sinal)
+                        
+                        if vagas_disponiveis > 0 and alvos_novos_filtrados:
+                            alvos_para_adicionar = alvos_novos_filtrados[:vagas_disponiveis]
+                            st.session_state.alvos_sinal.extend(alvos_para_adicionar)
+                            
+                            enviar_mensagem_telegram(
+                                f"🔄 *FUSÃO AFUNILADA (GALE)*\n"
+                                f"🎰 Roleta: `{roleta_selecionada}`\n"
+                                f"Dezenas adicionadas: `{alvos_para_adicionar}`\n"
+                                f"🎯 Alvos Totais (Máx {limite_maximo_alvos}): `{st.session_state.alvos_sinal}`"
+                            )
+                else:
+                    # Ativa Novo Sinal
+                    st.session_state.sinal_ativo = True
+                    st.session_state.alvos_sinal = res_ultimo["alvos"][:8]
+                    st.session_state.tentativa_atual = 0
+                    
+                    enviar_alerta_telegram(
+                        res_ultimo["ultimo"],
+                        res_ultimo["score_num"],
+                        st.session_state.alvos_sinal,
+                        [res_ultimo["status"]],
+                        roleta_nome=roleta_selecionada,
+                        tier_nome=tier_do_padrao,
+                        posicao_rank=posicao_rank,
+                        taxa_acerto=taxa_acerto
+                    )
 
 # Execução do Modo de Operação
 if modo_operacao == "On-line (Captura Automática)":
