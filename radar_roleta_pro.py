@@ -757,7 +757,7 @@ if not df_rank.empty and len(df_rank) >= 1:
 
     st.markdown("### 📹 Faixas de Classificação")
     e1, e2, e3, e4 = st.columns(4)
-    e1.info(f"👑 **ELITE (Top 3):** {', '.join(tiers.get('ELITE_TOP_3', ['—'])))}")
+    e1.info(f"👑 **ELITE (Top 3):** {', '.join(tiers.get('ELITE_TOP_3', ['—']))}")
     e2.success(f"🥇 **OURO (Top 5):** {', '.join(tiers.get('SELECAO_OURO_TOP_5', ['—']))}")
     e3.info(f"🥈 **SELEÇÃO (Top 10):** {len(tiers.get('SELECAO_TOP_10', []))} padrões")
     e4.info(f"🥉 **RADAR (Top 30):** {len(tiers.get('RADAR_TOP_30', []))} padrões")
