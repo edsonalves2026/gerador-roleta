@@ -5,6 +5,9 @@ import plotly.graph_objects as go
 import time
 import requests
 import json
+import uuid
+import numpy as np
+from collections import Counter
 
 # ==========================================
 # CONFIGURAÇÃO INICIAL DA PÁGINA STREAMLIT
