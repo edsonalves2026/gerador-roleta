@@ -574,7 +574,7 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
     res_ultimo = analisar_rodada_especifica(list(reversed(st.session_state.historico)))
     tiers_atuais, df_rank = obter_tiers_cache()
 
-    st.subheader(f"📊 Mapeamento Analítico Sniper - {roleta_selecionada}")
+      st.subheader(f"📊 Mapeamento Analítico Sniper - {roleta_selecionada}")
     posicoes_idx = [0, 1, 2, 12]
     nomes_pos = {0: "Pos 1", 1: "Pos 2", 2: "Pos 3", 12: "Pos 13"}
     dados_tabela = []
@@ -584,11 +584,18 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
         num = historico_completo[idx]
         ativacoes = res_motores["ativacoes"].get(num, set())
         peso = res_motores["pesos"].get(num, 0.0)
-        status_dezena = "⚪ Aguardar"
-        if num in res_motores["headshot"]:
-            status_dezena = "🎯 HEAD-SHOT"
-        elif num in res_motores["tiro_certo"]:
-            status_dezena = "🔥 TIRO CERTO"
+        
+        # ✅ NOVO: Status com números sugeridos
+      # Monta a lista de alvos sugeridos
+alvos_sugeridos = sorted(res_motores["headshot"] + res_motores["tiro_certo"])
+
+if num in res_motores["headshot"]:
+    status_dezena = f"🎯 HEAD-SHOT → {alvos_sugeridos}"
+elif num in res_motores["tiro_certo"]:
+    status_dezena = f"🔥 TIRO CERTO → {alvos_sugeridos}"
+else:
+    status_dezena = "⚪ Aguardar"
+        
         dados_tabela.append({
             "Posição": nomes_pos[idx],
             "Dezena": num,
@@ -597,8 +604,9 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
             "Px Top 1/2 (+3.5)": f"🟢 {puxadores_dict.get(num, [])[:2]}" if "Px Top 1/2" in ativacoes else "⚪",
             "Ausente BRK (+3.0)": "🟢 Sim" if "Ausente BRK" in ativacoes else "⚪",
             "Score Final 🔥": f"{peso:.1f}",
-            "Status": status_dezena
+            "Status": status_dezena  # ✅ Agora mostra: 🔥 TIRO CERTO → [4, 13, 22, 31]
         })
+        
     st.dataframe(pd.DataFrame(dados_tabela), use_container_width=True)
 
     if res_ultimo.get("score_num", 0) >= 4:
@@ -634,37 +642,21 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
             if num in nums:
                 setor_pertencente = s
                 break
-                
-             # ✅ Identificar Grupo BRK (retorna lista de números)
-        grupo_brk = obter_grupo_brk(num)
-        
-        score_item = 0
-        if pux: score_item += 1
-        if [viz["esq_1"], viz["dir_1"]]: score_item += 1
-        if camu: score_item += 1
-        if setor_pertencente != "-": score_item += 1
-        if inv is not None: score_item += 1
-        score_item = min(score_item, 5)
-        confirmacoes = "🔴" * score_item + "⚪" * (5 - score_item)
-        sugestao = f"SINAL: {sorted(list(set([num] + pux[:2] + [viz['esq_1'], viz['dir_1']] + camu + ([inv] if inv else []))))}" if score_item >= 4 else "AGUARDAR"
-        dados_tabela_mapeamento.append({
-            "Posição": f"Pos {idx+1}",
-            "Último": num,
-            "Esquerda": f"{viz['esq_2']} | {viz['esq_1']}",
-            "Direita": f"{viz['dir_1']} | {viz['dir_2']}",
-            "Puxadores Híbridos": str(pux[:4]),
-            "Vizinhos Físicos": f"Esq({viz['esq_1']}), Dir({viz['dir_1']})",
-            "Camuflados": str(camu),
-            "🏷️ Grupo BRK": grupo_brk,  # ✅ Agora mostra a lista de números
-            "Racetrack": setor_pertencente,
-            "Inversão": f"{num}→{inv}" if inv else "-",
-            "Reincidência": f"[{inv}]" if inv else "-",
-            "Confirmações": confirmacoes,
-            "Score": f"{score_item}/5",
-            "Status / Sugestão": sugestao
-        })
-    st.dataframe(pd.DataFrame(dados_tabela_mapeamento), use_container_width=True, hide_index=True)
-
+             st.subheader("🔬 Análise por Grupo Oculto BRK")
+    contagem_grupos = {}
+    for g, nums in GRUPO_OCULTO_BRK.items():
+        cnt = sum(1 for n in amostra if n in nums)
+        contagem_grupos[f"Grupo {g}"] = {
+            "Aparições": cnt,               # ← Nome da chave = "Aparições"
+            "Membros": sorted(nums),
+            "Ausentes no Grupo": sorted(set(nums) - set(amostra))
+        }
+    df_grupos = pd.DataFrame([
+        {"Grupo": g, "Aparições": v["Aparições"], "Membros": str(v["Membros"]), "Ausentes": str(v["Ausentes no Grupo"])}
+        for g, v in contagem_grupos.items()
+    ])
+    st.dataframe(df_grupos, use_container_width=True, hide_index=True)       
+  
     st.markdown("---")
     if sinal_identificado_texto:
         st.error(sinal_identificado_texto)
@@ -800,8 +792,7 @@ if st.session_state.get("historico"):
             "Ausentes no Grupo": sorted(set(nums) - set(amostra))
         }
     df_grupos = pd.DataFrame([
-        {"Grupo": g, "Aparições": v["Total Aparições"], "Membros": str(v["Membros"]), "Ausentes": str(v["Ausentes"])}
-        for g, v in contagem_grupos.items()
+       {"Grupo": g, "Aparições": v["Aparições"], "Membros": str(v["Membros"]), "Ausentes": str(v["Ausentes"])}
     ])
     st.dataframe(df_grupos, use_container_width=True, hide_index=True)
 
