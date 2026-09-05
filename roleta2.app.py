@@ -630,7 +630,7 @@ if st.session_state.get("historico"):
         st.plotly_chart(fig_freq, use_container_width=True)
 
        with col_g2:
-        st.markdown("### 📊 AVANÇADA")
+        st.markdown(f"### 📊 AVANÇADA")
         total = len(amostra)
         df_duzias = pd.DataFrame({
             'Grupo': ['1ª Dúz', '2ª Dúz', '3ª Dúz', '1ª Col', '2ª Col', '3ª Col'],
