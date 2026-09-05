@@ -332,10 +332,20 @@ def enviar_alerta_telegram(ultimo, score, alvos, padroes, roleta_nome, tier_nome
 # ==========================================
 # PAINEL LATERAL (SIDEBAR)
 # ==========================================
-st.sidebar.title("🎯 Radar Sniper Pro")
-roleta_selecionada = st.sidebar.selectbox("Selecione a Roleta:", list(ROLETA_URLS.keys()))
-modo_operacao = st.sidebar.radio("Modo de Operação:", ["Manual", "On-line (Captura Automática)"])
-
+st.sidebar.header("🕹️ Painel de Operação")
+modo_operacao = st.sidebar.selectbox("🌐 Modo de Operação:", ["On-line (Captura Automática)", "Off-line (Digitação Manual)"])
+roleta_selecionada = st.sidebar.selectbox("🎰 Selecionar Roleta:", list(URLS_ROLETAS.keys()))
+st.sidebar.markdown("---")
+filtro_hibrido_opcao = st.sidebar.selectbox(
+    "Nível de Filtragem dos Sinais:",
+    [
+        "Desativado (Usar apenas regras fixas)",
+        "🥉 Radar (Top 30 - Permissivo)",
+        "🥈 Seleção (Top 10 - Equilibrado)",
+        "🥇 Seleção Ouro (Top 5 - Conservador)",
+        "👑 Elite (Top 3 - Máxima Precisão)"
+    ], index=2
+)
 # Indicadores de Gestão de Risco na Sidebar
 st.sidebar.markdown("---")
 st.sidebar.subheader("🛡️ Status da Mesa")
