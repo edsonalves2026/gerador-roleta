@@ -495,6 +495,7 @@ def processar_novo_numero(num_novo):
                                             [sinal["tipo"]], roleta_nome=roleta_selecionada, tier_nome=tier_padrao,
                                             posicao_rank=sinal["rank"], taxa_acerto=sinal["taxa"])
 
+# ✅ BLOCO CORRIGIDO — MODO ON-LINE COM ATUALIZAÇÃO AUTOMÁTICA
 if modo_operacao == "On-line (Captura Automática)":
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
     if novos_dados:
@@ -503,8 +504,16 @@ if modo_operacao == "On-line (Captura Automática)":
             num_novo = novos_dados[0]
             processar_novo_numero(num_novo)
             st.session_state.historico = novos_dados
+            st.sidebar.success(f"🔄 Novo número detectado: **{num_novo}**")
+        else:
+            st.sidebar.info("✅ Sem alterações — monitorando...")
     else:
         st.sidebar.warning(f"🟡 Sem dados — API pode estar inacessível")
+    
+    # ✅ RECARREGAMENTO AUTOMÁTICO A CADA 5 SEGUNDOS
+    time.sleep(5)
+    st.rerun()
+
 else:
     st.sidebar.warning(f"🟠 Modo Manual ativo: **{roleta_selecionada}**")
     with st.sidebar.form(key="form_entrada", clear_on_submit=True):
