@@ -706,10 +706,10 @@ if st.session_state.historico:
             st.info(f"Dados insuficientes ({qtd}/12)")
 
     with c3:
-        st.markdown("### 🎨 Mapa de Cores — Últimas 50")
+        st.markdown("### 🎨 Mapa de Cores — Últimas 200")
         if qtd > 0:
             linhas_html = []
-            amostra_mapa = ultimas[:50]
+            amostra_mapa = ultimas[:200]
             for i in range(0, len(amostra_mapa), 10):
                 bloco = amostra_mapa[i:i+10]
                 html_bloco = "<div style='display:flex;gap:4px;margin:3px 0;'>"
