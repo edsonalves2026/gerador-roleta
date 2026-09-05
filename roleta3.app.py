@@ -61,11 +61,11 @@ GRUPO_OCULTO_BRK = {
     10: [0, 5, 20, 30, 19, 28]
 }
 
-# Função auxiliar: identificar qual grupo BRK pertence um número
+# Função auxiliar: retornar lista de números do grupo BRK
 def obter_grupo_brk(numero):
     for grupo, numeros in GRUPO_OCULTO_BRK.items():
         if numero in numeros:
-            return f"G{grupo}"
+            return str(sorted(numeros))  # Retorna a lista ex: [1, 10, 19, 28, 34]
     return "-"
 
 TABELA_PUXADORES_FIXA = {
@@ -634,7 +634,8 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
             if num in nums:
                 setor_pertencente = s
                 break
-        # ✅ Identificar Grupo BRK
+                
+             # ✅ Identificar Grupo BRK (retorna lista de números)
         grupo_brk = obter_grupo_brk(num)
         
         score_item = 0
@@ -654,7 +655,7 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
             "Puxadores Híbridos": str(pux[:4]),
             "Vizinhos Físicos": f"Esq({viz['esq_1']}), Dir({viz['dir_1']})",
             "Camuflados": str(camu),
-            "🏷️ Grupo BRK": grupo_brk,
+            "🏷️ Grupo BRK": grupo_brk,  # ✅ Agora mostra a lista de números
             "Racetrack": setor_pertencente,
             "Inversão": f"{num}→{inv}" if inv else "-",
             "Reincidência": f"[{inv}]" if inv else "-",
