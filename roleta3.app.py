@@ -495,7 +495,7 @@ def processar_novo_numero(num_novo):
                                             [sinal["tipo"]], roleta_nome=roleta_selecionada, tier_nome=tier_padrao,
                                             posicao_rank=sinal["rank"], taxa_acerto=sinal["taxa"])
 
-# ✅ BLOCO CORRIGIDO — MODO ON-LINE COM ATUALIZAÇÃO AUTOMÁTICA
+# ✅ MODO ON-LINE COM ATUALIZAÇÃO AUTOMÁTICA A CADA 5 SEGUNDOS
 if modo_operacao == "On-line (Captura Automática)":
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
     if novos_dados:
@@ -510,7 +510,6 @@ if modo_operacao == "On-line (Captura Automática)":
     else:
         st.sidebar.warning(f"🟡 Sem dados — API pode estar inacessível")
     
-    # ✅ RECARREGAMENTO AUTOMÁTICO A CADA 5 SEGUNDOS
     time.sleep(5)
     st.rerun()
 
@@ -546,10 +545,9 @@ if st.session_state.ultimo_resultado:
         st.error(f"⚠️ {st.session_state.ultimo_resultado}")
 
 # ==========================================
-# 8. MAPEAMENTO ANALÍTICO — CORRIGIDO
+# 8. MAPEAMENTO ANALÍTICO — FINALIZADO ✅
 # ==========================================
 sinal_identificado_texto = None
-
 if st.session_state.historico and len(st.session_state.historico) >= 30:
     st.markdown("---")
     historico_completo = st.session_state.historico
@@ -567,8 +565,6 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
     posicoes_idx = [0, 1, 2, 12]
     nomes_pos = {0: "Pos 1", 1: "Pos 2", 2: "Pos 3", 12: "Pos 13"}
     dados_tabela = []
-
-    # ✅ Calcula alvos UMA vez antes do loop
     alvos_sugeridos = sorted(res_motores["headshot"] + res_motores["tiro_certo"])
 
     for idx in posicoes_idx:
@@ -578,7 +574,6 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
         ativacoes = res_motores["ativacoes"].get(num, set())
         peso = res_motores["pesos"].get(num, 0.0)
         
-        # ✅ Status com números sugeridos
         if num in res_motores["headshot"]:
             status_dezena = f"🎯 HEAD-SHOT → {alvos_sugeridos}"
         elif num in res_motores["tiro_certo"]:
@@ -688,7 +683,7 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
             st.info("Nenhum padrão consolidou no mínimo 50% de acerto até o momento.")
 
 # ==========================================
-# 9. ESTATÍSTICAS E PAINEL VISUAL — CORRIGIDO
+# 9. ESTATÍSTICAS E PAINEL VISUAL
 # ==========================================
 if st.session_state.get("historico"):
     st.markdown("---")
@@ -702,105 +697,173 @@ if st.session_state.get("historico"):
             "Amostra (Últimas X rodadas):",
             min_value=10,
             max_value=max_amostra,
-            value=min(30, max_amostra),
-            step=5
+            value=min(100, max_amostra),
+            step=10
         )
-    
-    amostra = list(reversed(st.session_state.historico[:qtd_rodadas]))
-    contagem = pd.Series(amostra).value_counts().reindex(range(37), fill_value=0)
-    
-    quentes = contagem.sort_values(ascending=False).head(10)
-    frios = contagem.sort_values(ascending=True).head(10)
-    ausentes = [n for n in range(37) if n not in amostra]
-    
+
+    amostra = st.session_state.historico[:qtd_rodadas]
+    serie_numeros = pd.Series(amostra)
+    contagem = serie_numeros.value_counts().sort_index()
+
+    # ─── Classificação: Quentes / Frios ───
+    media_esperada = qtd_rodadas / 37
+    quentes = contagem[contagem > media_esperada].sort_values(ascending=False)
+    frios = contagem[contagem < media_esperada].sort_values()
+    zerados = [n for n in range(37) if n not in contagem.index]
+
+    # ─── Exibição em Colunas ───
     col1, col2, col3 = st.columns(3)
+
     with col1:
-        st.subheader("🔥 Números Quentes")
-        st.dataframe(
-            pd.DataFrame({"Número": quentes.index, "Vezes": quentes.values}),
-            use_container_width=True, hide_index=True
-        )
+        st.markdown("### 🔥 Números Quentes")
+        if not quentes.empty:
+            st.dataframe(quentes.rename("Vezes").reset_index(name="Vezes").rename(columns={"index": "Número"}), use_container_width=True, hide_index=True)
+        else:
+            st.info("Sem números quentes nesta amostra.")
+
     with col2:
-        st.subheader("❄️ Números Frios")
-        st.dataframe(
-            pd.DataFrame({"Número": frios.index, "Vezes": frios.values}),
-            use_container_width=True, hide_index=True
-        )
+        st.markdown("### ❄️ Números Frios")
+        if not frios.empty:
+            st.dataframe(frios.rename("Vezes").reset_index(name="Vezes").rename(columns={"index": "Número"}), use_container_width=True, hide_index=True)
+        else:
+            st.info("Sem números frios nesta amostra.")
+
     with col3:
-        st.subheader("⚠️ Ausentes da Amostra")
-        st.info(f"{sorted(ausentes)}")
-    
+        st.markdown("### ⬜ Nunca Apareceram")
+        if zerados:
+            st.write(", ".join(str(n) for n in sorted(zerados)))
+        else:
+            st.success("Todos os números já apareceram.")
+
+    # ─── Frequência por Cor ───
     st.markdown("---")
-    st.subheader("📈 Gráfico de Frequência — Números da Roleta")
-    
-    fig = px.bar(
-        x=contagem.index,
-        y=contagem.values,
-        labels={"x": "Número", "y": "Quantidade de Aparições"},
-        color=contagem.values,
-        color_continuous_scale=["#2c3e50", "#e74c3c"],
-        text=contagem.values
-    )
-    fig.update_layout(
-        height=400,
-        xaxis_title="Número da Roleta",
-        yaxis_title="Frequência",
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(tickmode="linear", dtick=1),
-        coloraxis_showscale=False
-    )
-    fig.update_traces(textposition="outside")
-    st.plotly_chart(fig, use_container_width=True)
-    
-    st.markdown("---")
-    st.subheader("🎨 Distribuição por Cor e Dezena")
-    
-    vermelhas = sum(1 for n in amostra if n in NUMEROS_VERMELHOS)
-    pretas = len(amostra) - vermelhas - amostra.count(0)
+    st.subheader("🎨 Distribuição por Cor e Paridade")
+
+    vermelhos = sum(1 for n in amostra if n in NUMEROS_VERMELHOS)
+    pretos = sum(1 for n in amostra if n not in NUMEROS_VERMELHOS and n != 0)
     zeros = amostra.count(0)
-    
-    col_cor1, col_cor2 = st.columns(2)
-    with col_cor1:
-        fig_cor = px.pie(
-            values=[vermelhas, pretas, zeros],
-            names=["🔴 Vermelhas", "⚫ Pretas", "🟢 Zero"],
-            color_discrete_sequence=["#e74c3c", "#2c3e50", "#27ae60"],
-            title=f"Distribuição por Cor — Últimas {qtd_rodadas} rodadas"
-        )
-        fig_cor.update_layout(height=300)
-        st.plotly_chart(fig_cor, use_container_width=True)
-    
-    with col_cor2:
-        d1 = sum(1 for n in amostra if 1 <= n <= 12)
-        d2 = sum(1 for n in amostra if 13 <= n <= 24)
-        d3 = sum(1 for n in amostra if 25 <= n <= 36)
-        fig_dez = px.pie(
-            values=[d1, d2, d3, zeros],
-            names=["1ª (1-12)", "2ª (13-24)", "3ª (25-36)", "Zero"],
-            color_discrete_sequence=["#3498db", "#9b59b6", "#f39c12", "#27ae60"],
-            title=f"Distribuição por Dezena — Últimas {qtd_rodadas} rodadas"
-        )
-        fig_dez.update_layout(height=300)
-        st.plotly_chart(fig_dez, use_container_width=True)
-    
+    pares = sum(1 for n in amostra if n != 0 and n % 2 == 0)
+    impares = sum(1 for n in amostra if n != 0 and n % 2 != 0)
+
+    col_cor1, col_cor2, col_cor3 = st.columns(3)
+    col_cor1.metric("🔴 Vermelhos", vermelhos, f"{vermelhos/qtd_rodadas*100:.1f}%")
+    col_cor2.metric("⚫ Pretos", pretos, f"{pretos/qtd_rodadas*100:.1f}%")
+    col_cor3.metric("🟢 Zeros", zeros, f"{zeros/qtd_rodadas*100:.1f}%")
+
+    col_par1, col_par2, _ = st.columns(3)
+    col_par1.metric("🔢 Pares", pares, f"{pares/qtd_rodadas*100:.1f}%")
+    col_par2.metric("🔢 Ímpares", impares, f"{impares/qtd_rodadas*100:.1f}%")
+
+    # ─── Frequência por Dezena ───
     st.markdown("---")
-    st.subheader("🔬 Análise por Grupo Oculto BRK")
-    contagem_grupos = {}
-    for g, nums in GRUPO_OCULTO_BRK.items():
-        cnt = sum(1 for n in amostra if n in nums)
-        contagem_grupos[f"Grupo {g}"] = {
-            "Aparições": cnt,
-            "Membros": sorted(nums),
-            "Ausentes no Grupo": sorted(set(nums) - set(amostra))
-        }
-    df_grupos = pd.DataFrame([
-        {"Grupo": g, "Aparições": v["Aparições"], "Membros": str(v["Membros"]), "Ausentes": str(v["Ausentes no Grupo"])}
-        for g, v in contagem_grupos.items()
-    ])
-    st.dataframe(df_grupos, use_container_width=True, hide_index=True)       
+    st.subheader("🔢 Frequência por Faixa / Dezena")
+
+    def faixa_num(n):
+        if n == 0:
+            return "0"
+        elif 1 <= n <= 12:
+            return "1–12"
+        elif 13 <= n <= 24:
+            return "13–24"
+        else:
+            return "25–36"
+
+    contagem_faixas = serie_numeros.apply(faixa_num).value_counts().reindex(["0", "1–12", "13–24", "25–36"])
+    df_faixas = pd.DataFrame({
+        "Faixa": contagem_faixas.index,
+        "Quantidade": contagem_faixas.values,
+        "Porcentagem": [f"{(v / qtd_rodadas * 100):.1f}%" if pd.notna(v) else "0.0%" for v in contagem_faixas.values]
+    })
+    st.dataframe(df_faixas, use_container_width=True, hide_index=True)
+
+    # ─── Gráfico de Barras — Frequência ───
+    st.markdown("---")
+    st.subheader("📈 Gráfico de Frequência por Número")
+
+    todos_numeros = pd.Series(0, index=range(37))
+    todos_numeros.update(contagem)
+    df_grafico = pd.DataFrame({
+        "Número": todos_numeros.index,
+        "Frequência": todos_numeros.values
+    })
+
+    cores_barras = []
+    for n in df_grafico["Número"]:
+        if n == 0:
+            cores_barras.append("#009933")
+        elif n in NUMEROS_VERMELHOS:
+            cores_barras.append("#ff3333")
+        else:
+            cores_barras.append("#222222")
+
+    fig = px.bar(
+        df_grafico,
+        x="Número",
+        y="Frequência",
+        color_discrete_sequence=cores_barras,
+        title=f"Frequência nas Últimas {qtd_rodadas} Rodadas",
+        labels={"Frequência": "Quantas vezes apareceu"}
+    )
+    fig.add_hline(y=media_esperada, line_dash="dash", line_color="gold",
+                  annotation_text="Média Esperada", annotation_position="top right")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ─── Gráfico de Distribuição Circular ───
+    st.markdown("---")
+    st.subheader("🎡 Distribuição no Disco da Roleta")
+
+    freq_disco = [0] * 37
+    for n in amostra:
+        freq_disco[ROULETTE_CYLINDER.index(n)] += 1
+
+    fig_disco = go.Figure()
+    fig_disco.add_trace(go.Barpolar(
+        r=freq_disco,
+        theta=[(360 / 37) * i for i in range(37)],
+        width=[360 / 37] * 37,
+        marker_color=[
+            "#009933" if ROULETTE_CYLINDER[i] == 0 else
+            "#ff3333" if ROULETTE_CYLINDER[i] in NUMEROS_VERMELHOS else "#222222"
+            for i in range(37)
+        ],
+        text=[str(ROULETTE_CYLINDER[i]) for i in range(37)],
+        hovertemplate="Número: %{text}<br>Frequência: %{r}<extra></extra>"
+    ))
+    fig_disco.update_layout(
+        title="Posicionamento Físico no Cilindro",
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, max(freq_disco) + 1]),
+            angularaxis=dict(tickmode="array", tickvals=[(360/37)*i for i in range(37)],
+                             ticktext=[str(n) for n in ROULETTE_CYLINDER])
+        ),
+        height=600
+    )
+    st.plotly_chart(fig_disco, use_container_width=True)
+
+    # ─── Análise de Setores ───
+    st.markdown("---")
+    st.subheader("🧭 Análise por Setores do Cilindro")
+
+    analise_setores = []
+    for nome, nums in SETORES_ROLETA.items():
+        qtd = sum(amostra.count(n) for n in nums)
+        pct = qtd / qtd_rodadas * 100
+        analise_setores.append({
+            "Setor": nome.replace("_", " "),
+            "Números Abrangidos": ", ".join(str(n) for n in nums),
+            "Ocorrências": qtd,
+            "Porcentagem": f"{pct:.1f}%"
+        })
+    st.dataframe(pd.DataFrame(analise_setores), use_container_width=True, hide_index=True)
 
 # ==========================================
-# FIM DO CÓDIGO
+# 10. RODAPÉ / INFORMAÇÕES
 # ==========================================
-
+st.markdown("---")
+st.markdown("""
+<div style="text-align:center; color:gray; font-size:0.85em;">
+    <strong>Radar de Roleta Pro — Sistema Sniper Analítico</strong><br>
+    Monitoramento em tempo real • Puxadores Híbridos • BRK Ocultos • Camuflados • Vizinhos Físicos • Classificação por Assertividade<br>
+    ⚠️ Ferramenta de análise e estatística — Não garante resultados, não é orientação para apostas. Use apenas para estudo e observação.
+</div>
+""", unsafe_allow_html=True)
