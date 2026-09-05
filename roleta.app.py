@@ -701,10 +701,10 @@ else:
 # ==========================================
 if st.session_state.historico:
     st.markdown("---")
-    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 1000)")
+    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 100)")
     
     total_disponivel = len(st.session_state.historico)
-    max_amostra = min(1000, total_disponivel)
+    max_amostra = min(200, total_disponivel)
     qtd_rodadas = st.slider(
         "Selecione o tamanho da amostra (Últimas X rodadas):",
         min_value=min(10, total_disponivel),
