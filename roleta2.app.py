@@ -619,7 +619,8 @@ if st.session_state.get("historico"):
     amostra = list(reversed(st.session_state.historico[:qtd_rodadas]))
 
     col_g1, col_g2, col_g3 = st.columns(3)
-    with col_g1:
+
+    with col_g1:  # ✅ 4 espaços dentro do bloco if
         st.markdown("### 📊 QUENTES/FRIOS")
         contagem = pd.Series(amostra).value_counts()
         st.write(f"🔥 **Quentes:** {contagem.head(5).index.tolist()}")
@@ -629,8 +630,8 @@ if st.session_state.get("historico"):
         fig_freq.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_freq, use_container_width=True)
 
-       with col_g2:
-        st.markdown(f"### 📊 AVANÇADA")
+    with col_g2:  # ✅ MESMA indentação que col_g1 — 4 espaços
+        st.markdown("### 📊 AVANÇADA")
         total = len(amostra)
         df_duzias = pd.DataFrame({
             'Grupo': ['1ª Dúz', '2ª Dúz', '3ª Dúz', '1ª Col', '2ª Col', '3ª Col'],
@@ -648,8 +649,8 @@ if st.session_state.get("historico"):
         fig_adv.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=5))
         st.plotly_chart(fig_adv, use_container_width=True)
 
-    with col_g3:
-        st.markdown(f"### 📊 MAPA DE CALOR")
+    with col_g3:  # ✅ Também com 4 espaços — alinhado com as outras
+        st.markdown("### 📊 MAPA DE CALOR")
         matriz_freq = {n: amostra.count(n) for n in range(0, 37)}
         grid_rows = [
             [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
@@ -674,7 +675,8 @@ if st.session_state.get("historico"):
         )
         st.plotly_chart(fig_grid, use_container_width=True)
 
-# ✅ Recarregamento inteligente — sem loop infinito
+# ✅ Fora do bloco if — sem indentação
 if modo_operacao == "On-line (Captura Automática)":
-    time.sleep(8)  # Intervalo maior para evitar sobrecarga
+    time.sleep(8)
     st.rerun()
+
