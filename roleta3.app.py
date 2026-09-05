@@ -5,12 +5,15 @@ import numpy as np
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+
 # ==========================================
 # 0. CONFIGURAÇÃO DA PÁGINA
 # ==========================================
 st.set_page_config(page_title="Radar de Roleta Pro - Sniper", layout="wide")
+
 TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "")
+
 # ==========================================
 # 1. MATRIZ DE POSICIONAMENTO E CONSTANTES
 # ==========================================
@@ -18,19 +21,24 @@ ROULETTE_CYLINDER = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
     5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
 ]
+
 NUMEROS_VERMELHOS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
+
 SETORES_ROLETA = {
     "VOISINS_DU_ZERO": [22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25],
     "TIERS_DU_CYLINDRE": [27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33],
     "ORPHELINS": [1, 20, 14, 31, 9, 17, 34, 6],
     "ZERO_SPIEL": [12, 35, 3, 26, 0, 32, 15]
 }
+
 CAMUFLADOS_BASE = {
     2: [11, 20, 29], 3: [12, 21, 30], 4: [13, 22, 31],
     5: [14, 23, 32], 6: [15, 24, 33], 7: [16, 25, 34],
     8: [17, 26, 35], 9: [18, 27, 36], 10: [1, 19, 28]
 }
+
 GRUPO_FANTASMA = {0, 2, 4, 6, 7, 11, 13, 14, 15, 17, 18, 19, 20, 21, 22, 25, 27, 28, 29, 31, 32, 34, 36}
+
 GRUPO_OCULTO_BRK = {
     1: [1, 10, 19, 28, 34],
     2: [2, 11, 20, 29, 24, 35],
@@ -43,6 +51,7 @@ GRUPO_OCULTO_BRK = {
     9: [9, 18, 27, 36],
     10: [0, 5, 20, 30, 19, 28]
 }
+
 TABELA_PUXADORES_FIXA = {
     0:  [33, 11, 21, 34], 1:  [20, 22, 32, 12], 2:  [36, 5, 7, 33],
     3:  [0, 7, 20, 10],   4:  [5, 10, 7, 3],    5:  [3, 6, 9, 27],
@@ -58,12 +67,14 @@ TABELA_PUXADORES_FIXA = {
     33: [7, 32, 1, 14],   34: [5, 2, 31, 33],   35: [6, 9, 3, 0],
     36: [0, 0, 0, 0]
 }
+
 URLS_ROLETAS = {
     "XXXtreme Lightning": "https://api.core.public.tipminer.com/v1/roulette/rounds/e640b7c7-aaba-4ffa-a678-6b6872898162/history?limit=200",
     "Roleta Brasileira": "https://api.core.public.tipminer.com/v1/roulette/rounds/45d12dd3-8f85-4ab2-8c86-4eaea7967e10/history?limit=200",
     "Immersive Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-f3703302d5cc/history?limit=200",
     "Swedish Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-40d2-b479-a28a01c6ee13/history?limit=200"
 }
+
 # ==========================================
 # 2. FUNÇÕES AUXILIARES E API
 # ==========================================
@@ -76,17 +87,20 @@ def obter_vizinhos_mesa(num):
         "dir_1": ROULETTE_CYLINDER[(idx + 1) % n],
         "dir_2": ROULETTE_CYLINDER[(idx + 2) % n],
     }
+
 def obter_dezena_invertida(numero):
     if numero < 10:
         inv = numero * 10
         return inv if inv <= 36 else None
     inv = int(str(numero)[::-1])
     return inv if inv <= 36 else None
+
 def obter_camuflados(numero):
     soma = sum(int(d) for d in str(numero))
     if soma > 10:
         soma = sum(int(d) for d in str(soma))
     return CAMUFLADOS_BASE.get(soma, [])
+
 def calcular_matriz_transicao(historico):
     if len(historico) < 2:
         return []
@@ -95,6 +109,7 @@ def calcular_matriz_transicao(historico):
     if not subsequentes:
         return []
     return pd.Series(subsequentes).value_counts().head(4).index.tolist()
+
 def obter_puxadores_otimizados(numero_sorteado, historico_recentes):
     if len(historico_recentes) < 100:
         return TABELA_PUXADORES_FIXA.get(numero_sorteado, [])
@@ -102,6 +117,7 @@ def obter_puxadores_otimizados(numero_sorteado, historico_recentes):
     puxadores_fixos = TABELA_PUXADORES_FIXA.get(numero_sorteado, [])
     intersecao = [num for num in puxadores_dinamicos if num in puxadores_fixos]
     return intersecao if intersecao else (puxadores_dinamicos[:4] if puxadores_dinamicos else puxadores_fixos)
+
 def validar_gatilho_sequencial_brk(sub_historico):
     if len(sub_historico) < 2:
         return {"sinal_ativo": False}
@@ -117,10 +133,12 @@ def validar_gatilho_sequencial_brk(sub_historico):
             "grupo_completo": todos_grupo, "prioridade_maxima": ausentes, "cobertura": cobertura
         }
     return {"sinal_ativo": False}
+
 def checar_estrategia_fantasma(historico):
     if len(historico) >= 3 and all(n in GRUPO_FANTASMA for n in historico[-3:]):
         return {"status": "ATIVADO", "principais": [9, 19, 27]}
     return {"status": "INATIVO"}
+
 def buscar_dados_roleta_url(roleta_nome):
     url = URLS_ROLETAS.get(roleta_nome)
     if not url:
@@ -153,6 +171,7 @@ def buscar_dados_roleta_url(roleta_nome):
     except Exception as e:
         st.sidebar.warning(f"❌ Erro na API: {str(e)[:80]}")
     return []
+
 # ==========================================
 # 3. NOTIFICAÇÕES TELEGRAM
 # ==========================================
@@ -190,6 +209,7 @@ def enviar_resultado_telegram(tipo, numero, etapa="", roleta_nome="Desconhecida"
     emoji = "✅" if tipo == "GREEN" else "❌"
     msg = f"{emoji} *RESULTADO: {tipo}* {f'({etapa})' if etapa else ''}\n🎰 Roleta: `{roleta_nome}`\n🎲 Número Sorteado: `{numero}`"
     return enviar_mensagem_telegram(msg)
+
 # ==========================================
 # 4. MOTOR SNIPER
 # ==========================================
@@ -202,6 +222,7 @@ def obter_posicoes_estrategicas(historico_completo):
         historico_completo[2],
         historico_completo[12]
     ]
+
 def processar_tiro_certo_e_headshot(historico_completo, dados_brk_in, puxadores_dict, vizinhos_fisi_dict, quentes_100):
     pos_estrategicas = obter_posicoes_estrategicas(historico_completo)
     if not pos_estrategicas:
@@ -244,6 +265,7 @@ def processar_tiro_certo_e_headshot(historico_completo, dados_brk_in, puxadores_
         "candidatos": candidatos_ordenados,
         "ativacoes": ativacoes_detalhadas
     }
+
 def aplicar_afunilamento_estrategico(alvos_brutos, padrao_nome, df_rank, res_tiro_certo):
     if df_rank.empty or padrao_nome not in df_rank["Padrão"].values:
         return {"status": "INVALIDO", "alvos": []}
@@ -270,6 +292,7 @@ def aplicar_afunilamento_estrategico(alvos_brutos, padrao_nome, df_rank, res_tir
     if intersecao_base:
         return {"status": "VALIDADO", "tipo": "🚨 SINAL CONFIRMADO", "alvos": intersecao_base[:8], "taxa": taxa_acerto, "rank": pos_rank}
     return {"status": "SEM_CONFLUENCIA", "alvos": []}
+
 # ==========================================
 # 5. CLASSIFICADOR DE TIERS + CACHE
 # ==========================================
@@ -298,12 +321,14 @@ def classificar_padroes_200_rodadas(historico_completo):
         "SELECAO_TOP_10": l[:10],
         "RADAR_TOP_30": l[:30]
     }, estudo_ordenado
+
 def obter_tiers_cache():
     h = len(st.session_state.historico)
     if st.session_state.get("tier_cache_tamanho", -1) != h:
         st.session_state["tier_cache"], st.session_state["df_rank_cache"] = classificar_padroes_200_rodadas(st.session_state.historico)
         st.session_state["tier_cache_tamanho"] = h
     return st.session_state["tier_cache"], st.session_state["df_rank_cache"]
+
 # ==========================================
 # 6. MOTOR DE SCORAGE
 # ==========================================
@@ -357,10 +382,12 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
         "alvos": alvos_ordenados,
         "dados_brk": res_brk
     }
+
 # ==========================================
 # 7. ESTADO INICIAL E PAINEL LATERAL
 # ==========================================
 st.title("🎯 Radar de Roleta Pro - Painel SNIPER")
+
 if "historico" not in st.session_state:
     st.session_state.historico = []
 if "sinal_ativo" not in st.session_state:
@@ -371,6 +398,9 @@ if "tentativa_atual" not in st.session_state:
     st.session_state.tentativa_atual = 0
 if "ultimo_resultado" not in st.session_state:
     st.session_state.ultimo_resultado = None
+if "ultimo_alerta" not in st.session_state:
+    st.session_state.ultimo_alerta = {"ultimo": None, "score": None, "alvos": [], "padroes": [], "roleta": "", "tier": None, "rank": None, "taxa": None}
+
 st.sidebar.header("🕹️ Painel de Operação")
 modo_operacao = st.sidebar.selectbox("🌐 Modo:", ["On-line (Captura Automática)", "Off-line (Digitação Manual)"])
 roleta_selecionada = st.sidebar.selectbox("🎰 Selecionar Roleta:", list(URLS_ROLETAS.keys()))
@@ -382,6 +412,7 @@ filtro_hibrido_opcao = st.sidebar.selectbox(
      "🥇 Seleção Ouro (Top 5)", "👑 Elite (Top 3 - Máxima Precisão)"],
     index=1
 )
+
 # ==========================================
 # PROCESSAMENTO DE NOVO NÚMERO E SINAIS
 # ==========================================
@@ -404,7 +435,7 @@ def processar_novo_numero(num_novo):
             st.session_state.tentativa_atual = 0
             return
     if len(st.session_state.historico) >= 30:
-        res_ultimo = analisar_rodada_especifica(list(reversed(st.session_state.historico)))  # ✅ PARÊNTESE FECHADO
+        res_ultimo = analisar_rodada_especifica(list(reversed(st.session_state.historico)))
         if res_ultimo.get("score_num", 0) >= 4:
             hist_completo = st.session_state.historico
             hist_200 = list(reversed(st.session_state.historico[:200]))
@@ -439,10 +470,20 @@ def processar_novo_numero(num_novo):
                     st.session_state.sinal_ativo = True
                     st.session_state.alvos_sinal = sinal["alvos"]
                     st.session_state.tentativa_atual = 0
+                    st.session_state.ultimo_alerta = {
+                        "ultimo": res_ultimo["ultimo"],
+                        "score": res_ultimo["score_num"],
+                        "alvos": sinal["alvos"],
+                        "padroes": [sinal["tipo"]],
+                        "roleta": roleta_selecionada,
+                        "tier": tier_padrao,
+                        "rank": sinal["rank"],
+                        "taxa": sinal["taxa"]
+                    }
                     enviar_alerta_telegram(res_ultimo["ultimo"], res_ultimo["score_num"], sinal["alvos"],
                                             [sinal["tipo"]], roleta_nome=roleta_selecionada, tier_nome=tier_padrao,
                                             posicao_rank=sinal["rank"], taxa_acerto=sinal["taxa"])
-# Execução da Entrada de Dados
+
 if modo_operacao == "On-line (Captura Automática)":
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
     if novos_dados:
@@ -465,7 +506,10 @@ else:
     if st.sidebar.button("🧹 Limpar Histórico"):
         st.session_state.clear()
         st.rerun()
-# Interface Principal
+
+# ==========================================
+# INTERFACE PRINCIPAL
+# ==========================================
 st.subheader("Esteira Temporal")
 if st.session_state.historico:
     cols = st.columns(min(len(st.session_state.historico[:13]), 13))
@@ -474,14 +518,18 @@ if st.session_state.historico:
             st.metric(label=f"Pos {i+1}", value=num)
 else:
     st.info("Aguardando capturas...")
+
 if st.session_state.ultimo_resultado:
     if "GREEN" in st.session_state.ultimo_resultado:
         st.success(f"🎉 {st.session_state.ultimo_resultado}")
     else:
         st.error(f"⚠️ {st.session_state.ultimo_resultado}")
+
 # ==========================================
 # 8. MAPEAMENTO ANALÍTICO
 # ==========================================
+sinal_identificado_texto = None
+
 if st.session_state.historico and len(st.session_state.historico) >= 30:
     st.markdown("---")
     historico_completo = st.session_state.historico
@@ -492,8 +540,9 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
     vizinhos_fisi_dict = {n: [obter_vizinhos_mesa(n)["esq_1"], obter_vizinhos_mesa(n)["dir_1"]] for n in range(37)}
     quentes_100 = set(pd.Series(historico_200[-100:]).value_counts().head(10).index.tolist())
     res_motores = processar_tiro_certo_e_headshot(historico_completo, dados_brk_in, puxadores_dict, vizinhos_fisi_dict, quentes_100)
-    res_ultimo = analisar_rodada_especifica(list(reversed(st.session_state.historico)))  # ✅ PARÊNTESE FECHADO
+    res_ultimo = analisar_rodada_especifica(list(reversed(st.session_state.historico)))
     tiers_atuais, df_rank = obter_tiers_cache()
+
     st.subheader(f"📊 Mapeamento Analítico Sniper - {roleta_selecionada}")
     posicoes_idx = [0, 1, 2, 12]
     nomes_pos = {0: "Pos 1", 1: "Pos 2", 2: "Pos 3", 12: "Pos 13"}
@@ -520,9 +569,11 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
             "Status": status_dezena
         })
     st.dataframe(pd.DataFrame(dados_tabela), use_container_width=True)
+
     if res_ultimo.get("score_num", 0) >= 4:
         sinal_afunilado = aplicar_afunilamento_estrategico(res_ultimo["alvos"], res_ultimo["padrao_nome"], df_rank, res_motores)
         if sinal_afunilado["status"] == "VALIDADO":
+            sinal_identificado_texto = f"🚨 SINAL IDENTIFICADO: {sinal_afunilado['alvos']}"
             cor = "success" if "HEAD-SHOT" in sinal_afunilado['tipo'] else "warning" if "TIRO CERTO" in sinal_afunilado['tipo'] else "info"
             getattr(st, cor)(f"✅ **{sinal_afunilado['tipo']}** | Entrar nestas Dezenas:")
             c1, c2, c3 = st.columns(3)
@@ -536,6 +587,67 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
             st.write("- **Motivo:** Padrão com assertividade < 50% ou dezenas não confluentes com as posições 1, 2, 3 ou 13.")
     else:
         st.info("⚪ AGUARDANDO CONFLUÊNCIA... Radar sniper monitorando exclusivamente posições 1, 2, 3 e 13.")
+
+    st.markdown("---")
+    st.subheader(f"📊 Mapeamento Analítico - {roleta_selecionada}")
+    posicoes_mapeamento = list(range(min(10, len(historico_completo))))
+    dados_tabela_mapeamento = []
+    for idx in posicoes_mapeamento:
+        num = historico_completo[idx]
+        viz = obter_vizinhos_mesa(num)
+        pux = TABELA_PUXADORES_FIXA.get(num, [])
+        camu = obter_camuflados(num)
+        inv = obter_dezena_invertida(num)
+        setor_pertencente = "-"
+        for s, nums in SETORES_ROLETA.items():
+            if num in nums:
+                setor_pertencente = s
+                break
+        score_item = 0
+        if pux: score_item +=1
+        if [viz["esq_1"], viz["dir_1"]]: score_item +=1
+        if camu: score_item +=1
+        if setor_pertencente != "-": score_item +=1
+        if inv is not None: score_item +=1
+        score_item = min(score_item, 5)
+        confirmacoes = "🔴" * score_item + "⚪" * (5 - score_item)
+        sugestao = f"SINAL: {sorted(list(set([num] + pux[:2] + [viz['esq_1'], viz['dir_1']] + camu + ([inv] if inv else []))))}" if score_item >=4 else "AGUARDAR"
+        dados_tabela_mapeamento.append({
+            "Posição": f"Pos {idx+1}",
+            "Último": num,
+            "Esquerda": f"{viz['esq_2']} | {viz['esq_1']}",
+            "Direita": f"{viz['dir_1']} | {viz['dir_2']}",
+            "Puxadores Híbridos": str(pux[:4]),
+            "Vizinhos Físicos": f"Esq({viz['esq_1']}), Dir({viz['dir_1']})",
+            "Camuflados": str(camu),
+            "Racetrack": setor_pertencente,
+            "Inversão": f"{num}→{inv}" if inv else "-",
+            "Reincidência": f"[{inv}]" if inv else "-",
+            "Confirmações": confirmacoes,
+            "Score": f"{score_item}/5",
+            "Status / Sugestão": sugestao
+        })
+    st.dataframe(pd.DataFrame(dados_tabela_mapeamento), use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+    if sinal_identificado_texto:
+        st.error(sinal_identificado_texto)
+        ultimo_alerta = st.session_state.ultimo_alerta
+        if st.button("🔁 Reenviar Alerta para Telegram"):
+            if ultimo_alerta["alvos"]:
+                ok, mensagem = enviar_alerta_telegram(
+                    ultimo_alerta["ultimo"], ultimo_alerta["score"], ultimo_alerta["alvos"],
+                    ultimo_alerta["padroes"], roleta_nome=ultimo_alerta["roleta"],
+                    tier_nome=ultimo_alerta["tier"], posicao_rank=ultimo_alerta["rank"],
+                    taxa_acerto=ultimo_alerta["taxa"]
+                )
+                if ok:
+                    st.success("✅ Alerta reenviado com sucesso!")
+                else:
+                    st.error(f"❌ Falha: {mensagem}")
+            else:
+                st.warning("⚠️ Nenhum alerta armazenado para reenviar.")
+
     with st.expander("🏆 Ranking dos Padrões (Assertividade ≥ 50% - Últimas 200 Rodadas)"):
         if not df_rank.empty:
             df_rank_exib = df_rank.copy()
@@ -543,6 +655,7 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
             st.dataframe(df_rank_exib, use_container_width=True)
         else:
             st.info("Nenhum padrão consolidou no mínimo 50% de acerto até o momento.")
+
 # ==========================================
 # 9. ESTATÍSTICAS E PAINEL VISUAL
 # ==========================================
