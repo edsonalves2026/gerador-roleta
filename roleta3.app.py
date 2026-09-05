@@ -31,14 +31,23 @@ SETORES_ROLETA = {
     "ZERO_SPIEL": [12, 35, 3, 26, 0, 32, 15]
 }
 
+# ✅ CORRIGIDO: Adicionada chave 1 que faltava para o número 10
 CAMUFLADOS_BASE = {
-    2: [11, 20, 29], 3: [12, 21, 30], 4: [13, 22, 31],
-    5: [14, 23, 32], 6: [15, 24, 33], 7: [16, 25, 34],
-    8: [17, 26, 35], 9: [18, 27, 36], 10: [1, 19, 28]
+    1: [10, 19, 28],   # ← NOVO: soma=1 → números 1,10,19,28
+    2: [11, 20, 29],
+    3: [12, 21, 30],
+    4: [13, 22, 31],
+    5: [14, 23, 32],
+    6: [15, 24, 33],
+    7: [16, 25, 34],
+    8: [17, 26, 35],
+    9: [18, 27, 36],
+    10: [1, 19, 28]     # mantido para compatibilidade
 }
 
 GRUPO_FANTASMA = {0, 2, 4, 6, 7, 11, 13, 14, 15, 17, 18, 19, 20, 21, 22, 25, 27, 28, 29, 31, 32, 34, 36}
 
+# ✅ GRUPO_OCULTO_BRK conforme solicitado
 GRUPO_OCULTO_BRK = {
     1: [1, 10, 19, 28, 34],
     2: [2, 11, 20, 29, 24, 35],
@@ -51,6 +60,13 @@ GRUPO_OCULTO_BRK = {
     9: [9, 18, 27, 36],
     10: [0, 5, 20, 30, 19, 28]
 }
+
+# Função auxiliar: identificar qual grupo BRK pertence um número
+def obter_grupo_brk(numero):
+    for grupo, numeros in GRUPO_OCULTO_BRK.items():
+        if numero in numeros:
+            return f"G{grupo}"
+    return "-"
 
 TABELA_PUXADORES_FIXA = {
     0:  [33, 11, 21, 34], 1:  [20, 22, 32, 12], 2:  [36, 5, 7, 33],
@@ -95,11 +111,21 @@ def obter_dezena_invertida(numero):
     inv = int(str(numero)[::-1])
     return inv if inv <= 36 else None
 
-def obter_camuflados(numero):
+# ✅ CORRIGIDA: Função de soma dígitos reduzida corretamente
+def soma_digitos_reduzida(numero):
+    """Soma os dígitos e reduz a um dígito (1-9)"""
+    if numero == 0:
+        return 0
     soma = sum(int(d) for d in str(numero))
-    if soma > 10:
+    while soma >= 10:
         soma = sum(int(d) for d in str(soma))
-    return CAMUFLADOS_BASE.get(soma, [])
+    return soma
+
+def obter_camuflados(numero):
+    """Retorna camuflados com base na soma reduzida dos dígitos"""
+    soma = soma_digitos_reduzida(numero)
+    camu = CAMUFLADOS_BASE.get(soma, [])
+    return [n for n in camu if n != numero]  # remove o próprio número
 
 def calcular_matriz_transicao(historico):
     if len(historico) < 2:
@@ -361,6 +387,11 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
         score += 1
         filtros.append("Fantasma")
         alvos.update(fantasma["principais"])
+    camu = obter_camuflados(ultimo)
+    if camu:
+        score += 1
+        filtros.append("Camuflados")
+        alvos.update(camu[:2])
     reincidencia = [n for n in alvos if n in sub_historico[-14:][-3:]]
     if reincidencia:
         score += 1
@@ -526,7 +557,7 @@ if st.session_state.ultimo_resultado:
         st.error(f"⚠️ {st.session_state.ultimo_resultado}")
 
 # ==========================================
-# 8. MAPEAMENTO ANALÍTICO
+# 8. MAPEAMENTO ANALÍTICO — COM COLUNA BRK ADICIONADA
 # ==========================================
 sinal_identificado_texto = None
 
@@ -589,7 +620,7 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
         st.info("⚪ AGUARDANDO CONFLUÊNCIA... Radar sniper monitorando exclusivamente posições 1, 2, 3 e 13.")
 
     st.markdown("---")
-    st.subheader(f"📊 Mapeamento Analítico - {roleta_selecionada}")
+    st.subheader(f"📊 Mapeamento Analítico Completo - {roleta_selecionada}")
     posicoes_mapeamento = list(range(min(10, len(historico_completo))))
     dados_tabela_mapeamento = []
     for idx in posicoes_mapeamento:
@@ -603,15 +634,18 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
             if num in nums:
                 setor_pertencente = s
                 break
+        # ✅ Identificar Grupo BRK
+        grupo_brk = obter_grupo_brk(num)
+        
         score_item = 0
-        if pux: score_item +=1
-        if [viz["esq_1"], viz["dir_1"]]: score_item +=1
-        if camu: score_item +=1
-        if setor_pertencente != "-": score_item +=1
-        if inv is not None: score_item +=1
+        if pux: score_item += 1
+        if [viz["esq_1"], viz["dir_1"]]: score_item += 1
+        if camu: score_item += 1
+        if setor_pertencente != "-": score_item += 1
+        if inv is not None: score_item += 1
         score_item = min(score_item, 5)
         confirmacoes = "🔴" * score_item + "⚪" * (5 - score_item)
-        sugestao = f"SINAL: {sorted(list(set([num] + pux[:2] + [viz['esq_1'], viz['dir_1']] + camu + ([inv] if inv else []))))}" if score_item >=4 else "AGUARDAR"
+        sugestao = f"SINAL: {sorted(list(set([num] + pux[:2] + [viz['esq_1'], viz['dir_1']] + camu + ([inv] if inv else []))))}" if score_item >= 4 else "AGUARDAR"
         dados_tabela_mapeamento.append({
             "Posição": f"Pos {idx+1}",
             "Último": num,
@@ -620,6 +654,7 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
             "Puxadores Híbridos": str(pux[:4]),
             "Vizinhos Físicos": f"Esq({viz['esq_1']}), Dir({viz['dir_1']})",
             "Camuflados": str(camu),
+            "🏷️ Grupo BRK": grupo_brk,
             "Racetrack": setor_pertencente,
             "Inversão": f"{num}→{inv}" if inv else "-",
             "Reincidência": f"[{inv}]" if inv else "-",
@@ -661,69 +696,114 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
 # ==========================================
 if st.session_state.get("historico"):
     st.markdown("---")
-    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 30)")
+    st.subheader("📊 Estatísticas das Rodadas — Quentes / Frios / Frequência")
+    
     total_disponivel = len(st.session_state.historico)
-    max_amostra = min(30, total_disponivel)
-    qtd_rodadas = st.slider("Amostra (Últimas X rodadas):", min_value=10, max_value=max_amostra, value=max_amostra, step=5)
-    amostra = list(reversed(st.session_state.historico[:qtd_rodadas]))
-    col_g1, col_g2, col_g3 = st.columns(3)
-    with col_g1:
-        st.markdown("### 📊 QUENTES/FRIOS")
-        contagem = pd.Series(amostra).value_counts()
-        st.write(f"🔥 **Quentes:** {contagem.head(5).index.tolist()}")
-        st.write(f"🧊 **Frios:** {contagem.tail(5).index.tolist()}")
-        freq_df = pd.DataFrame({'Número': contagem.index.astype(str), 'Frequência': contagem.values})
-        fig_freq = px.bar(freq_df.head(10), x='Número', y='Frequência', title="Top 10")
-        fig_freq.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig_freq, use_container_width=True)
-    with col_g2:
-        st.markdown("### 📊 AVANÇADA")
-        total = len(amostra)
-        df_duzias = pd.DataFrame({
-            'Grupo': ['1ª Dúz', '2ª Dúz', '3ª Dúz', '1ª Col', '2ª Col', '3ª Col'],
-            'Porcentagem': [
-                round((sum(1 for n in amostra if 1 <= n <= 12) / total) * 100, 1),
-                round((sum(1 for n in amostra if 13 <= n <= 24) / total) * 100, 1),
-                round((sum(1 for n in amostra if 25 <= n <= 36) / total) * 100, 1),
-                round((sum(1 for n in amostra if n > 0 and n % 3 == 1) / total) * 100, 1),
-                round((sum(1 for n in amostra if n > 0 and n % 3 == 2) / total) * 100, 1),
-                round((sum(1 for n in amostra if n > 0 and n % 3 == 0) / total) * 100, 1)
-            ]
-        })
-        fig_adv = px.bar(df_duzias, x='Grupo', y='Porcentagem', text='Porcentagem')
-        fig_adv.update_traces(texttemplate='%{text}%', textposition='outside')
-        fig_adv.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=5))
-        st.plotly_chart(fig_adv, use_container_width=True)
-    with col_g3:
-        st.markdown("### 📊 MAPA DE CALOR")
-        matriz_freq = {n: amostra.count(n) for n in range(0, 37)}
-        grid_rows = [
-            [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
-            [0, 2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
-            [0, 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
-        ]
-        text_vals = [[f"{n}<br>({matriz_freq[n]})" for n in row] for row in grid_rows]
-        color_vals = [[(1.0 if n in NUMEROS_VERMELHOS else 0.5) if n != 0 else 0.0 for n in row] for row in grid_rows]
-        fig_grid = go.Figure(data=go.Heatmap(
-            z=color_vals,
-            text=text_vals,
-            texttemplate="%{text}",
-            colorscale=[[0.0, "#FFFFFF"], [0.5, "#1E1E1E"], [1.0, "#D32F2F"]],
-            showscale=False
-        ))
-        fig_grid.update_layout(
-            template="plotly_dark",
-            height=280,
-            margin=dict(l=5, r=5, t=10, b=5),
-            xaxis=dict(showticklabels=False),
-            yaxis=dict(showticklabels=False)
+    max_amostra = min(200, total_disponivel)
+    col_amostra, _ = st.columns([2, 3])
+    with col_amostra:
+        qtd_rodadas = st.slider(
+            "Amostra (Últimas X rodadas):",
+            min_value=10,
+            max_value=max_amostra,
+            value=min(30, max_amostra),
+            step=5
         )
-        st.plotly_chart(fig_grid, use_container_width=True)
+    
+    amostra = list(reversed(st.session_state.historico[:qtd_rodadas]))
+    contagem = pd.Series(amostra).value_counts().reindex(range(37), fill_value=0)
+    
+    quentes = contagem.sort_values(ascending=False).head(10)
+    frios = contagem.sort_values(ascending=True).head(10)
+    ausentes = [n for n in range(37) if n not in amostra]
 
-# ✅ Botão de Teste Telegram — MOVIDO para cá (fora de funções)
-if st.sidebar.button("🧪 Testar Envio Telegram"):
-    ok, retorno = enviar_mensagem_telegram("✅ Teste — Mensagem funcionando!")
-    if ok:
-        st.sidebar.success(retorno)
-    else:
-        st.sidebar.error(retorno)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.subheader("🔥 Números Quentes")
+        st.dataframe(
+            pd.DataFrame({"Número": quentes.index, "Vezes": quentes.values}),
+            use_container_width=True, hide_index=True
+        )
+    with col2:
+        st.subheader("❄️ Números Frios")
+        st.dataframe(
+            pd.DataFrame({"Número": frios.index, "Vezes": frios.values}),
+            use_container_width=True, hide_index=True
+        )
+    with col3:
+        st.subheader("⚠️ Ausentes da Amostra")
+        st.info(f"{sorted(ausentes)}")
+
+    st.markdown("---")
+    st.subheader("📈 Gráfico de Frequência — Números da Roleta")
+    
+    fig = px.bar(
+        x=contagem.index,
+        y=contagem.values,
+        labels={"x": "Número", "y": "Quantidade de Aparições"},
+        color=contagem.values,
+        color_continuous_scale=["#2c3e50", "#e74c3c"],
+        text=contagem.values
+    )
+    fig.update_layout(
+        height=400,
+        xaxis_title="Número da Roleta",
+        yaxis_title="Frequência",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(tickmode="linear", dtick=1),
+        coloraxis_showscale=False
+    )
+    fig.update_traces(textposition="outside")
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("🎨 Distribuição por Cor e Dezena")
+    
+    vermelhas = sum(1 for n in amostra if n in NUMEROS_VERMELHOS)
+    pretas = len(amostra) - vermelhas - amostra.count(0)
+    zeros = amostra.count(0)
+    
+    col_cor1, col_cor2 = st.columns(2)
+    with col_cor1:
+        fig_cor = px.pie(
+            values=[vermelhas, pretas, zeros],
+            names=["🔴 Vermelhas", "⚫ Pretas", "🟢 Zero"],
+            color_discrete_sequence=["#e74c3c", "#2c3e50", "#27ae60"],
+            title=f"Distribuição por Cor — Últimas {qtd_rodadas} rodadas"
+        )
+        fig_cor.update_layout(height=300)
+        st.plotly_chart(fig_cor, use_container_width=True)
+    
+    with col_cor2:
+        d1 = sum(1 for n in amostra if 1 <= n <= 12)
+        d2 = sum(1 for n in amostra if 13 <= n <= 24)
+        d3 = sum(1 for n in amostra if 25 <= n <= 36)
+        fig_dez = px.pie(
+            values=[d1, d2, d3, zeros],
+            names=["1ª (1-12)", "2ª (13-24)", "3ª (25-36)", "Zero"],
+            color_discrete_sequence=["#3498db", "#9b59b6", "#f39c12", "#27ae60"],
+            title=f"Distribuição por Dezena — Últimas {qtd_rodadas} rodadas"
+        )
+        fig_dez.update_layout(height=300)
+        st.plotly_chart(fig_dez, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("🔬 Análise por Grupo Oculto BRK")
+    contagem_grupos = {}
+    for g, nums in GRUPO_OCULTO_BRK.items():
+        cnt = sum(1 for n in amostra if n in nums)
+        contagem_grupos[f"Grupo {g}"] = {
+            "Total Aparições": cnt,
+            "Membros": sorted(nums),
+            "Ausentes no Grupo": sorted(set(nums) - set(amostra))
+        }
+    df_grupos = pd.DataFrame([
+        {"Grupo": g, "Aparições": v["Total Aparições"], "Membros": str(v["Membros"]), "Ausentes": str(v["Ausentes"])}
+        for g, v in contagem_grupos.items()
+    ])
+    st.dataframe(df_grupos, use_container_width=True, hide_index=True)
+
+# ==========================================
+# FIM DO CÓDIGO
+# ==========================================
