@@ -175,17 +175,22 @@ def buscar_dados_roleta_url(roleta_nome):
 # ==========================================
 # 3. NOTIFICAÇÕES TELEGRAM
 # ==========================================
-def enviar_mensagem_telegram(texto):
-    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "SEU_BOT_TOKEN_HERE":
-        return False, "Token não configurado."
+def enviar_mensagem_telegram(mensagem):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return False, "Token ou Chat ID não configurados nos Secrets."
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": texto, "parse_mode": "Markdown"}
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "Markdown"}
     try:
-        r = requests.post(url, json=payload, timeout=5)
-        return r.status_code == 200, "Mensagem enviada!"
+        res = requests.post(url, json=payload, timeout=5)
+        return (True, "Enviado com sucesso!") if res.status_code == 200 else (False, res.text)
     except Exception as e:
         return False, str(e)
 
+def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes, tier_nome="", posicao_rank=None, taxa_acerto=None):
+    texto_detalhes = "\n".join([f"• {d}" for d in detalhes])
+    prefixo_tier = f"🏆 *Classificação:* `{tier_nome}`\n" if tier_nome else ""
+    str_rank = f"📊 *Posição no Ranking:* `#{posicao_rank}º lugar` ({taxa_acerto}% de assertividade)\n" if posicao_rank else ""
+    
 def enviar_alerta_telegram(ultimo, score, alvos, padroes, roleta_nome="Desconhecida", tier_nome="Indefinido", posicao_rank=None, taxa_acerto=None):
     pos_str = f"#{posicao_rank}" if posicao_rank else "N/A"
     taxa_str = f"{taxa_acerto}%" if taxa_acerto is not None else "N/A"
@@ -518,8 +523,8 @@ else:
 # Interface Principal
 st.subheader("Esteira Temporal")
 if st.session_state.historico:
-    cols = st.columns(min(len(st.session_state.historico[:14]), 14))
-    for i, num in enumerate(st.session_state.historico[:14]):
+    cols = st.columns(min(len(st.session_state.historico[:13]), 13))
+    for i, num in enumerate(st.session_state.historico[:13]):
         with cols[i]:
             st.metric(label=f"Pos {i+1}", value=num)
 else:
