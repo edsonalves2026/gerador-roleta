@@ -31,9 +31,8 @@ SETORES_ROLETA = {
     "ZERO_SPIEL": [12, 35, 3, 26, 0, 32, 15]
 }
 
-# ✅ CORRIGIDO: Adicionada chave 1 que faltava para o número 10
 CAMUFLADOS_BASE = {
-    1: [10, 19, 28],   # ← NOVO: soma=1 → números 1,10,19,28
+    1: [10, 19, 28],
     2: [11, 20, 29],
     3: [12, 21, 30],
     4: [13, 22, 31],
@@ -42,12 +41,11 @@ CAMUFLADOS_BASE = {
     7: [16, 25, 34],
     8: [17, 26, 35],
     9: [18, 27, 36],
-    10: [1, 19, 28]     # mantido para compatibilidade
+    10: [1, 19, 28]
 }
 
 GRUPO_FANTASMA = {0, 2, 4, 6, 7, 11, 13, 14, 15, 17, 18, 19, 20, 21, 22, 25, 27, 28, 29, 31, 32, 34, 36}
 
-# ✅ GRUPO_OCULTO_BRK conforme solicitado
 GRUPO_OCULTO_BRK = {
     1: [1, 10, 19, 28, 34],
     2: [2, 11, 20, 29, 24, 35],
@@ -61,11 +59,10 @@ GRUPO_OCULTO_BRK = {
     10: [0, 5, 20, 30, 19, 28]
 }
 
-# Função auxiliar: retornar lista de números do grupo BRK
 def obter_grupo_brk(numero):
     for grupo, numeros in GRUPO_OCULTO_BRK.items():
         if numero in numeros:
-            return str(sorted(numeros))  # Retorna a lista ex: [1, 10, 19, 28, 34]
+            return str(sorted(numeros))
     return "-"
 
 TABELA_PUXADORES_FIXA = {
@@ -111,9 +108,7 @@ def obter_dezena_invertida(numero):
     inv = int(str(numero)[::-1])
     return inv if inv <= 36 else None
 
-# ✅ CORRIGIDA: Função de soma dígitos reduzida corretamente
 def soma_digitos_reduzida(numero):
-    """Soma os dígitos e reduz a um dígito (1-9)"""
     if numero == 0:
         return 0
     soma = sum(int(d) for d in str(numero))
@@ -122,10 +117,9 @@ def soma_digitos_reduzida(numero):
     return soma
 
 def obter_camuflados(numero):
-    """Retorna camuflados com base na soma reduzida dos dígitos"""
     soma = soma_digitos_reduzida(numero)
     camu = CAMUFLADOS_BASE.get(soma, [])
-    return [n for n in camu if n != numero]  # remove o próprio número
+    return [n for n in camu if n != numero]
 
 def calcular_matriz_transicao(historico):
     if len(historico) < 2:
@@ -205,22 +199,16 @@ def enviar_mensagem_telegram(mensagem):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return False, "Token ou Chat ID não configurados nos Secrets."
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": mensagem,
-        "parse_mode": "Markdown"
-    }
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "Markdown"}
     try:
         res = requests.post(url, data=payload, timeout=10)
         if res.status_code == 200:
             return True, "✅ Mensagem enviada com sucesso!"
-        else:
-            return False, f"❌ Erro {res.status_code}: {res.text[:100]}"
+        return False, f"❌ Erro {res.status_code}: {res.text[:100]}"
     except Exception as e:
         return False, f"❌ Falha na conexão: {str(e)}"
 
-def enviar_alerta_telegram(ultimo, score, alvos, padroes, roleta_nome="Desconhecida", 
-                           tier_nome="Indefinido", posicao_rank=None, taxa_acerto=None):
+def enviar_alerta_telegram(ultimo, score, alvos, padroes, roleta_nome="Desconhecida", tier_nome="Indefinido", posicao_rank=None, taxa_acerto=None):
     pos_str = f"#{posicao_rank}" if posicao_rank else "N/A"
     taxa_str = f"{taxa_acerto}%" if taxa_acerto is not None else "N/A"
     msg = (f"🚨 *ALERTA SNIPER DETECTADO* 🚨\n\n"
@@ -242,12 +230,7 @@ def enviar_resultado_telegram(tipo, numero, etapa="", roleta_nome="Desconhecida"
 def obter_posicoes_estrategicas(historico_completo):
     if len(historico_completo) < 13:
         return []
-    return [
-        historico_completo[0],
-        historico_completo[1],
-        historico_completo[2],
-        historico_completo[12]
-    ]
+    return [historico_completo[0], historico_completo[1], historico_completo[2], historico_completo[12]]
 
 def processar_tiro_certo_e_headshot(historico_completo, dados_brk_in, puxadores_dict, vizinhos_fisi_dict, quentes_100):
     pos_estrategicas = obter_posicoes_estrategicas(historico_completo)
@@ -444,9 +427,6 @@ filtro_hibrido_opcao = st.sidebar.selectbox(
     index=1
 )
 
-# ==========================================
-# PROCESSAMENTO DE NOVO NÚMERO E SINAIS
-# ==========================================
 def processar_novo_numero(num_novo):
     if st.session_state.sinal_ativo:
         st.session_state.tentativa_atual += 1
@@ -557,7 +537,7 @@ if st.session_state.ultimo_resultado:
         st.error(f"⚠️ {st.session_state.ultimo_resultado}")
 
 # ==========================================
-# 8. MAPEAMENTO ANALÍTICO — COM COLUNA BRK ADICIONADA
+# 8. MAPEAMENTO ANALÍTICO — CORRIGIDO
 # ==========================================
 sinal_identificado_texto = None
 
@@ -574,10 +554,14 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
     res_ultimo = analisar_rodada_especifica(list(reversed(st.session_state.historico)))
     tiers_atuais, df_rank = obter_tiers_cache()
 
-      st.subheader(f"📊 Mapeamento Analítico Sniper - {roleta_selecionada}")
+    st.subheader(f"📊 Mapeamento Analítico Sniper - {roleta_selecionada}")
     posicoes_idx = [0, 1, 2, 12]
     nomes_pos = {0: "Pos 1", 1: "Pos 2", 2: "Pos 3", 12: "Pos 13"}
     dados_tabela = []
+
+    # ✅ Calcula alvos UMA vez antes do loop
+    alvos_sugeridos = sorted(res_motores["headshot"] + res_motores["tiro_certo"])
+
     for idx in posicoes_idx:
         if idx >= len(historico_completo):
             continue
@@ -585,16 +569,13 @@ if st.session_state.historico and len(st.session_state.historico) >= 30:
         ativacoes = res_motores["ativacoes"].get(num, set())
         peso = res_motores["pesos"].get(num, 0.0)
         
-        # ✅ NOVO: Status com números sugeridos
-      # Monta a lista de alvos sugeridos
-alvos_sugeridos = sorted(res_motores["headshot"] + res_motores["tiro_certo"])
-
-if num in res_motores["headshot"]:
-    status_dezena = f"🎯 HEAD-SHOT → {alvos_sugeridos}"
-elif num in res_motores["tiro_certo"]:
-    status_dezena = f"🔥 TIRO CERTO → {alvos_sugeridos}"
-else:
-    status_dezena = "⚪ Aguardar"
+        # ✅ Status com números sugeridos
+        if num in res_motores["headshot"]:
+            status_dezena = f"🎯 HEAD-SHOT → {alvos_sugeridos}"
+        elif num in res_motores["tiro_certo"]:
+            status_dezena = f"🔥 TIRO CERTO → {alvos_sugeridos}"
+        else:
+            status_dezena = "⚪ Aguardar"
         
         dados_tabela.append({
             "Posição": nomes_pos[idx],
@@ -604,9 +585,8 @@ else:
             "Px Top 1/2 (+3.5)": f"🟢 {puxadores_dict.get(num, [])[:2]}" if "Px Top 1/2" in ativacoes else "⚪",
             "Ausente BRK (+3.0)": "🟢 Sim" if "Ausente BRK" in ativacoes else "⚪",
             "Score Final 🔥": f"{peso:.1f}",
-            "Status": status_dezena  # ✅ Agora mostra: 🔥 TIRO CERTO → [4, 13, 22, 31]
+            "Status": status_dezena
         })
-        
     st.dataframe(pd.DataFrame(dados_tabela), use_container_width=True)
 
     if res_ultimo.get("score_num", 0) >= 4:
@@ -642,21 +622,35 @@ else:
             if num in nums:
                 setor_pertencente = s
                 break
-             st.subheader("🔬 Análise por Grupo Oculto BRK")
-    contagem_grupos = {}
-    for g, nums in GRUPO_OCULTO_BRK.items():
-        cnt = sum(1 for n in amostra if n in nums)
-        contagem_grupos[f"Grupo {g}"] = {
-            "Aparições": cnt,               # ← Nome da chave = "Aparições"
-            "Membros": sorted(nums),
-            "Ausentes no Grupo": sorted(set(nums) - set(amostra))
-        }
-    df_grupos = pd.DataFrame([
-        {"Grupo": g, "Aparições": v["Aparições"], "Membros": str(v["Membros"]), "Ausentes": str(v["Ausentes no Grupo"])}
-        for g, v in contagem_grupos.items()
-    ])
-    st.dataframe(df_grupos, use_container_width=True, hide_index=True)       
-  
+        grupo_brk = obter_grupo_brk(num)
+        
+        score_item = 0
+        if pux: score_item += 1
+        if [viz["esq_1"], viz["dir_1"]]: score_item += 1
+        if camu: score_item += 1
+        if setor_pertencente != "-": score_item += 1
+        if inv is not None: score_item += 1
+        score_item = min(score_item, 5)
+        confirmacoes = "🔴" * score_item + "⚪" * (5 - score_item)
+        sugestao = f"SINAL: {sorted(list(set([num] + pux[:2] + [viz['esq_1'], viz['dir_1']] + camu + ([inv] if inv else []))))}" if score_item >= 4 else "AGUARDAR"
+        dados_tabela_mapeamento.append({
+            "Posição": f"Pos {idx+1}",
+            "Último": num,
+            "Esquerda": f"{viz['esq_2']} | {viz['esq_1']}",
+            "Direita": f"{viz['dir_1']} | {viz['dir_2']}",
+            "Puxadores Híbridos": str(pux[:4]),
+            "Vizinhos Físicos": f"Esq({viz['esq_1']}), Dir({viz['dir_1']})",
+            "Camuflados": str(camu),
+            "🏷️ Grupo BRK": grupo_brk,
+            "Racetrack": setor_pertencente,
+            "Inversão": f"{num}→{inv}" if inv else "-",
+            "Reincidência": f"[{inv}]" if inv else "-",
+            "Confirmações": confirmacoes,
+            "Score": f"{score_item}/5",
+            "Status / Sugestão": sugestao
+        })
+    st.dataframe(pd.DataFrame(dados_tabela_mapeamento), use_container_width=True, hide_index=True)
+
     st.markdown("---")
     if sinal_identificado_texto:
         st.error(sinal_identificado_texto)
@@ -685,7 +679,7 @@ else:
             st.info("Nenhum padrão consolidou no mínimo 50% de acerto até o momento.")
 
 # ==========================================
-# 9. ESTATÍSTICAS E PAINEL VISUAL
+# 9. ESTATÍSTICAS E PAINEL VISUAL — CORRIGIDO
 # ==========================================
 if st.session_state.get("historico"):
     st.markdown("---")
@@ -709,7 +703,7 @@ if st.session_state.get("historico"):
     quentes = contagem.sort_values(ascending=False).head(10)
     frios = contagem.sort_values(ascending=True).head(10)
     ausentes = [n for n in range(37) if n not in amostra]
-
+    
     col1, col2, col3 = st.columns(3)
     with col1:
         st.subheader("🔥 Números Quentes")
@@ -726,7 +720,7 @@ if st.session_state.get("historico"):
     with col3:
         st.subheader("⚠️ Ausentes da Amostra")
         st.info(f"{sorted(ausentes)}")
-
+    
     st.markdown("---")
     st.subheader("📈 Gráfico de Frequência — Números da Roleta")
     
@@ -749,7 +743,7 @@ if st.session_state.get("historico"):
     )
     fig.update_traces(textposition="outside")
     st.plotly_chart(fig, use_container_width=True)
-
+    
     st.markdown("---")
     st.subheader("🎨 Distribuição por Cor e Dezena")
     
@@ -780,22 +774,24 @@ if st.session_state.get("historico"):
         )
         fig_dez.update_layout(height=300)
         st.plotly_chart(fig_dez, use_container_width=True)
-
+    
     st.markdown("---")
     st.subheader("🔬 Análise por Grupo Oculto BRK")
     contagem_grupos = {}
     for g, nums in GRUPO_OCULTO_BRK.items():
         cnt = sum(1 for n in amostra if n in nums)
         contagem_grupos[f"Grupo {g}"] = {
-            "Total Aparições": cnt,
+            "Aparições": cnt,
             "Membros": sorted(nums),
             "Ausentes no Grupo": sorted(set(nums) - set(amostra))
         }
     df_grupos = pd.DataFrame([
-       {"Grupo": g, "Aparições": v["Aparições"], "Membros": str(v["Membros"]), "Ausentes": str(v["Ausentes"])}
+        {"Grupo": g, "Aparições": v["Aparições"], "Membros": str(v["Membros"]), "Ausentes": str(v["Ausentes no Grupo"])}
+        for g, v in contagem_grupos.items()
     ])
-    st.dataframe(df_grupos, use_container_width=True, hide_index=True)
+    st.dataframe(df_grupos, use_container_width=True, hide_index=True)       
 
 # ==========================================
 # FIM DO CÓDIGO
 # ==========================================
+
