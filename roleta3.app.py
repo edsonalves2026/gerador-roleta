@@ -16,6 +16,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "")
+
 # ==========================================
 # CONSTANTES E MATRIZES ORIGINAIS DA MESA
 # ==========================================
@@ -79,10 +82,11 @@ TABELA_PUXADORES_FIXA = {
     36: [0, 0, 0, 0]
 }
 
-ROLETA_URLS = {
-    "Roleta Brasileiro": "https://api.casinoplatform.com/v1/roleta_brasileiro",
-    "Roleta VIP": "https://api.casinoplatform.com/v1/roleta_vip",
-    "Roleta Relâmpago": "https://api.casinoplatform.com/v1/roleta_relampago"
+URLS_ROLETAS = {
+    "XXXtreme Lightning": "https://api.core.public.tipminer.com/v1/roulette/rounds/e640b7c7-aaba-4ffa-a678-6b6872898162/history",
+    "Roleta Brasileira": "https://api.core.public.tipminer.com/v1/roulette/rounds/45d12dd3-8f85-4ab2-8c86-4eaea7967e10/history",
+    "Immersive Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-f3703302d5cc/history",
+    "Swedish Roulette": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-40d2-b479-a28a01c6ee13/history"
 }
 
 # ==========================================
