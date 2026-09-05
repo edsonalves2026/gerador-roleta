@@ -69,6 +69,12 @@ TABELA_PUXADORES_FIXA = {
     36: [0, 0, 0, 0]
 }
 
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+]
+
 URLS_ROLETAS = {
     "XXXtreme Lightning": "https://api.core.public.tipminer.com/v1/roulette/rounds/e640b7c7-aaba-4ffa-a678-6b6872898162/history?limit=200",
     "Roleta Brasileira": "https://api.core.public.tipminer.com/v1/roulette/rounds/45d12dd3-8f85-4ab2-8c86-4eaea7967e10/history?limit=200",
@@ -176,17 +182,17 @@ def buscar_dados_roleta_url(roleta_nome):
 # ==========================================
 # 3. NOTIFICAÇÕES TELEGRAM
 # ==========================================
-def enviar_mensagem_telegram(texto):
-    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "SEU_BOT_TOKEN_HERE":
-        return False, "Token não configurado."
+def enviar_mensagem_telegram(mensagem):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return False, "Token ou Chat ID não configurados nos Secrets."
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": texto, "parse_mode": "Markdown"}
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "Markdown"}
     try:
-        r = requests.post(url, json=payload, timeout=5)
-        return r.status_code == 200, "Mensagem enviada!"
+        res = requests.post(url, json=payload, timeout=5)
+        return (True, "Enviado com sucesso!") if res.status_code == 200 else (False, res.text)
     except Exception as e:
         return False, str(e)
-
+        
 def enviar_alerta_telegram(ultimo, score, alvos, padroes, roleta_nome="Desconhecida", tier_nome="Indefinido", posicao_rank=None, taxa_acerto=None):
     pos_str = f"#{posicao_rank}" if posicao_rank else "N/A"
     taxa_str = f"{taxa_acerto}%" if taxa_acerto is not None else "N/A"
@@ -198,9 +204,29 @@ def enviar_alerta_telegram(ultimo, score, alvos, padroes, roleta_nome="Desconhec
            f"📋 *Confluência:* {', '.join(padroes)}")
     return enviar_mensagem_telegram(msg)
 
-def enviar_resultado_telegram(tipo, numero, etapa="", roleta_nome="Desconhecida"):
-    emoji = "✅" if tipo == "GREEN" else "❌"
-    msg = f"{emoji} *RESULTADO: {tipo}* {f'({etapa})' if etapa else ''}\n🎰 Roleta: `{roleta_nome}`\n🎲 Número Sorteado: `{numero}`"
+def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes, tier_nome="", posicao_rank=None, taxa_acerto=None):
+    texto_detalhes = "\n".join([f"• {d}" for d in detalhes])
+    prefixo_tier = f"🏆 *Classificação:* `{tier_nome}`\n" if tier_nome else ""
+    str_rank = f"📊 *Posição no Ranking:* `#{posicao_rank}º lugar` ({taxa_acerto}% de assertividade)\n" if posicao_rank else ""
+    
+    mensagem = (
+        f"🚨 *SINAL CONFIRMADO - RADAR DE ROLETA*\n\n"
+        f"{prefixo_tier}"
+        f"{str_rank}"
+        f"📌 *Último Número:* `{ultimo_num}`\n"
+        f"📊 *Score de Assertividade:* `{score}/5`\n"
+        f"🎯 *Alvos Sugeridos:* `{alvos}`\n"
+        f"🛡️ *Proteção:* `0 (Zero)`\n\n"
+        f"🔍 *Filtros Convergentes:*\n{texto_detalhes}\n\n"
+        f"⚠️ *Entrada recomendada: Manter aposta por até 3 a 4 rodadas.*"
+    )
+    return enviar_mensagem_telegram(mensagem)
+
+def enviar_resultado_telegram(tipo, numero, etapa=""):
+    if tipo == "GREEN":
+        msg = f"✅ *GREEN CONFIRMADO!* 🎉\n\n🎯 Número Bateu: `{numero}`\n📍 Momento: `{etapa}`"
+    else:
+        msg = f"❌ *RED / LOSS* 😔\n\n📌 Último Sorteado: `{numero}`\n⚠️ Limite de Gales atingido."
     return enviar_mensagem_telegram(msg)
 
 # ==========================================
