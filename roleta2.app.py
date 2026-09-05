@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 # 0. CONFIGURAÇÃO DA PÁGINA
 # ==========================================
 st.set_page_config(page_title="Radar de Roleta Pro - Sniper", layout="wide")
+
 TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "")
 
