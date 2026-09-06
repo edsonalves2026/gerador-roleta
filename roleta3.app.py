@@ -258,8 +258,8 @@ def checar_estrategia_fantasma(historico):
         return {"status": "ATIVADO", "principais": [9, 19, 27]}
     return {"status": "INATIVO"}
 
-def validar_gatilho_sequencial_brk(historico_50):
-    if not historico_50 or len(historico_50) < 2:
+def validar_gatilho_sequencial_brk(historico_200):
+    if not historico_200 or len(historico_200) < 2:
         return {"sinal_ativo": False, "motivo": "Aguardando mais rodadas."}
 
     dezena_atual = historico_200[-1]
