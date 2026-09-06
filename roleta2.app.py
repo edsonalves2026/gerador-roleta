@@ -573,8 +573,6 @@ if st.session_state.historico:
         else:
             st.info(f"Dados insuficientes ({qtd}/12)")
 
-# Supondo que você definiu as colunas anteriormente, ex: c1, c2, c3 = st.columns(3)
-
 with c3:
     st.markdown("### 🎨 Mapa de Cores — Últimas 100")
     
