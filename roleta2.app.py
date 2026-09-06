@@ -902,7 +902,7 @@ else:
     > *Dinâmico* = baseado nas últimas 100 rodadas | *BRK* = tabela fixa
     """)
 
-  else:
+else:
     st.info("ℹ️ Inicie a captura ou digite números manualmente para visualizar as estatísticas.")
 
 # ==========================================
