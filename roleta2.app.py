@@ -572,8 +572,10 @@ if st.session_state.historico:
             st.plotly_chart(fig_meta, use_container_width=True)
         else:
             st.info(f"Dados insuficientes ({qtd}/12)")
-            
-   with c3:
+
+# Supondo que você definiu as colunas anteriormente, ex: c1, c2, c3 = st.columns(3)
+
+with c3:
     st.markdown("### 🎨 Mapa de Cores — Últimas 100")
     
     if qtd > 0:
@@ -587,12 +589,11 @@ if st.session_state.historico:
             key="fmt_mapa_cores"
         )
         
-        # Define o raio da borda conforme o formato escolhido
         if formato == "Círculo":
             border_radius = "50%"
         elif formato == "Arredondado":
             border_radius = "6px"
-        else: # Quadrado
+        else:
             border_radius = "0px"
 
         linhas_html = []
@@ -602,11 +603,11 @@ if st.session_state.historico:
             
             for n in bloco:
                 if n == 0:
-                    bg_cor = "#00AA00" # Verde
+                    bg_cor = "#00AA00"
                 elif n in NUMEROS_VERMELHOS:
-                    bg_cor = "#FF2222" # Vermelho
+                    bg_cor = "#FF2222"
                 else:
-                    bg_cor = "#111111" # Preto
+                    bg_cor = "#111111"
                 
                 spans_bloco.append(
                     f'<span style="background-color:{bg_cor};color:#FFF;border-radius:{border_radius};'
@@ -617,9 +618,7 @@ if st.session_state.historico:
             linha = f'<div style="display:flex;flex-wrap:nowrap;margin-bottom:2px;">{"".join(spans_bloco)}</div>'
             linhas_html.append(linha)
 
-        # Envelopa tudo em uma única div limpa sem quebras de linha para o Streamlit não falhar
         mapa_completo_html = f'<div style="background:#0d0e12;padding:10px;border-radius:8px;border:1px solid #333;">{"".join(linhas_html)}</div>'
-        
         st.markdown(mapa_completo_html, unsafe_allow_html=True)
     else:
         st.info("Aguardando dados...")
