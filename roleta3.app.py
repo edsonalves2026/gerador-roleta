@@ -97,19 +97,15 @@ def determinar_modo_operacional(
 ):
     diferenca = score_dinamico - score_brk
 
-    # 1. Trava de Cooldown (Impede trocas prematuras)
     if rodadas_no_modo_atual < trava_cooldown:
         return modo_atual, f"🔒 Cooldown ativo ({rodadas_no_modo_atual}/{trava_cooldown} rodadas)"
 
-    # 2. Aplicação da Zona de Histese (> 5%)
     if diferenca > 5.0:
         novo_modo = "DINAMICO"
         motivo = f"Vantagem Dinâmica > 5% ({diferenca:+.1f}%)"
     elif diferenca < -5.0:
         novo_modo = "BRK"
         motivo = f"Vantagem BRK > 5% ({abs(diferenca):.1f}%)"
-
-    # 3. Empate Técnico / Histese (Entre -5% e +5%) -> Desempate
     else:
         if seco_dinamico > seco_brk:
             novo_modo = "DINAMICO"
@@ -118,7 +114,6 @@ def determinar_modo_operacional(
             novo_modo = "BRK"
             motivo = f"Desempate por Tiro Seco ({seco_brk}% vs {seco_dinamico}%)"
         else:
-            # Mantém o modo atual se houver empate completo; se for início, padrão DINAMICO
             novo_modo = modo_atual if modo_atual else "DINAMICO"
             motivo = "Inércia / Padrão Mantido (Empate na Histese)"
 
@@ -257,6 +252,23 @@ def checar_estrategia_fantasma(historico):
     if len(historico) >= 3 and all(n in GRUPO_FANTASMA for n in historico[-3:]):
         return {"status": "ATIVADO", "principais": [9, 19, 27]}
     return {"status": "INATIVO"}
+
+def obter_grupo_brk_simples(numero):
+    if numero == 0:
+        grp = 10
+    else:
+        d1 = numero // 10
+        d2 = numero % 10
+        grp = d1 + d2
+        if grp > 10:
+            grp = (grp // 10) + (grp % 10)
+    return grp, TABELA_OCULTOS_BRK.get(grp, [])
+
+def obter_ocultos_dinamico(numero, historico_recentes):
+    puxadores = obter_puxadores_otimizados(numero, historico_recentes)
+    camuflados = obter_camuflados(numero)
+    uniao = list(dict.fromkeys(puxadores + camuflados))
+    return uniao
 
 def validar_gatilho_sequencial_brk(historico_200):
     if not historico_200 or len(historico_200) < 2:
@@ -432,6 +444,9 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
 
     padrao_nome = " + ".join(filtros_ativos) if filtros_ativos else "Geral"
 
+    grp_brk, dezenas_brk = obter_grupo_brk_simples(ultimo)
+    dezenas_dinamico = obter_ocultos_dinamico(ultimo, sub_historico)
+
     return {
         "ultimo": ultimo,
         "esquerda": f"{vizinhos['esq_2']} | {vizinhos['esq_1']}",
@@ -439,6 +454,8 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
         "puxadores": str(puxadores[:2]),
         "vizinhos_str": f"Esq({vizinhos['esq_1']}), Dir({vizinhos['dir_1']})",
         "camuflados": str(obter_camuflados(ultimo)),
+        "ocultos_brk": f"G{grp_brk}: {dezenas_brk}",
+        "ocultos_dinamico": str(dezenas_dinamico),
         "racetrack": setor_dom,
         "inversao": str_inversao,
         "reincidencia": str(reincidencia) if reincidencia else "-",
@@ -469,7 +486,6 @@ if "rodadas_no_modo_atual" not in st.session_state:
 # ==========================================
 # 6. MÁQUINA DE ESTADOS & MODO ATIVO (LED)
 # ==========================================
-# Cálculo de métricas básicas para acionamento do modo
 score_dinamico = 88.5
 score_brk = 82.0
 seco_dinamico = 45.0
@@ -485,7 +501,6 @@ modo_ativo, status_motivo = determinar_modo_operacional(
     trava_cooldown=15
 )
 
-# Atualiza estado de sessão
 if modo_ativo != st.session_state.modo_operacional_atual:
     st.session_state.modo_operacional_atual = modo_ativo
     st.session_state.rodadas_no_modo_atual = 0
@@ -513,7 +528,6 @@ st.markdown("---")
 # ==========================================
 st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
-# Painel Lateral
 st.sidebar.header("🕹️ Painel de Operação")
 modo_operacao = st.sidebar.selectbox(
     "🌐 Modo de Operação:",
@@ -629,7 +643,6 @@ def processar_novo_numero(num_novo):
                     modo_estrategia=estrategia_telegram
                 )
 
-# Modo Online / Manual
 if modo_operacao == "On-line (Captura Automática)":
     st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
@@ -722,6 +735,8 @@ if st.session_state.historico:
             "Puxadores Híbridos": res["puxadores"],
             "Vizinhos Físicos": res["vizinhos_str"],
             "Camuflados": res["camuflados"],
+            "Ocultos BRK": res["ocultos_brk"],
+            "Ocultos Dinâmico": res["ocultos_dinamico"],
             "Racetrack": res["racetrack"],
             "Inversão": res["inversao"],
             "Reincidência": res["reincidencia"],
