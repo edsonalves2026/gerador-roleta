@@ -674,6 +674,37 @@ if st.session_state.ultimo_resultado:
         st.success(f"🎉 Resultado do Último Sinal: **{st.session_state.ultimo_resultado}**")
     else:
         st.error(f"⚠️ Resultado do Último Sinal: **{st.session_state.ultimo_resultado}**")
+# ==========================================
+# 10. SINAL ATIVO — GALE & ACOMPANHAMENTO
+# ==========================================
+st.markdown("---")
+st.subheader("🚨 Sinal Ativo & Acompanhamento")
+
+if st.session_state.get('sinal_ativo', False):
+    tentativa = st.session_state.get('tentativa_atual', 0)
+    st.warning(f"⚠️ **SINAL EM ANDAMENTO — Tentativa {tentativa + 1}/3**")
+    
+    alvos = st.session_state.get('alvos_sinal', [])
+    alvos_exibicao = [str(n) for n in alvos]
+    
+    st.markdown("### 🎯 Alvos Sugeridos:")
+    st.markdown(f"## `{' | '.join(alvos_exibicao)}`")
+    st.info("🛡️ Proteção recomendada: Apostar também no **0 (Zero)** para cobertura.")
+
+    progresso = (tentativa + 1) / 3
+    st.progress(min(progresso, 1.0), text=f"Rodada {tentativa + 1} de 3 (Limite de Gales)")
+
+    dica_etapa = {
+        0: "💰 Entrada — Valor Base",
+        1: "📈 Gale 1 — Aumentar ~50%",
+        2: "📊 Gale 2 — Aumentar ~100%",
+        3: "🛑 Parar — Limite Atingido"
+    }
+    st.info(f"💡 Sugestão de aposta: **{dica_etapa.get(tentativa, 'Parar')}**")
+
+else:
+    st.success("✅ Nenhum sinal ativo — Aguardando padrão convergente...")
+
 
 # Tabela Analítica
 if st.session_state.historico:
@@ -936,36 +967,6 @@ if st.session_state.get("historico", []):
 else:
     st.info("ℹ️ Inicie a captura ou digite números manualmente para visualizar as estatísticas.")
 
-# ==========================================
-# 10. SINAL ATIVO — GALE & ACOMPANHAMENTO
-# ==========================================
-st.markdown("---")
-st.subheader("🚨 Sinal Ativo & Acompanhamento")
-
-if st.session_state.get('sinal_ativo', False):
-    tentativa = st.session_state.get('tentativa_atual', 0)
-    st.warning(f"⚠️ **SINAL EM ANDAMENTO — Tentativa {tentativa + 1}/3**")
-    
-    alvos = st.session_state.get('alvos_sinal', [])
-    alvos_exibicao = [str(n) for n in alvos]
-    
-    st.markdown("### 🎯 Alvos Sugeridos:")
-    st.markdown(f"## `{' | '.join(alvos_exibicao)}`")
-    st.info("🛡️ Proteção recomendada: Apostar também no **0 (Zero)** para cobertura.")
-
-    progresso = (tentativa + 1) / 3
-    st.progress(min(progresso, 1.0), text=f"Rodada {tentativa + 1} de 3 (Limite de Gales)")
-
-    dica_etapa = {
-        0: "💰 Entrada — Valor Base",
-        1: "📈 Gale 1 — Aumentar ~50%",
-        2: "📊 Gale 2 — Aumentar ~100%",
-        3: "🛑 Parar — Limite Atingido"
-    }
-    st.info(f"💡 Sugestão de aposta: **{dica_etapa.get(tentativa, 'Parar')}**")
-
-else:
-    st.success("✅ Nenhum sinal ativo — Aguardando padrão convergente...")
 
 # ==========================================
 # RODAPÉ
