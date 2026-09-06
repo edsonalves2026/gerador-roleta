@@ -842,27 +842,38 @@ if st.session_state.historico:
         
         st.caption(f"**Par:** {round((par/total_amostra)*100)}% | **Ímpar:** {round((impar/total_amostra)*100)}% | **1-18:** {round((baixas/total_amostra)*100)}% | **19-36:** {round((altas/total_amostra)*100)}%")
 
-   with c3:
-        st.markdown("### 🎨 Mapa de Cores — Últimas 100")
-        if qtd > 0:
-            linhas_html = []
-            amostra_mapa = ultimas[:100]
-            for i in range(0, len(amostra_mapa), 10):
-                bloco = amostra_mapa[i:i+10]
-                html_bloco = "<div style='display:flex;gap:4px;margin:3px 0;'>"
-                for n in bloco:
-                    if n == 0:
-                        bg_cor = "#00AA00"
-                    elif n in NUMEROS_VERMELHOS:
-                        bg_cor = "#FF2222"
-                    else:
-                        bg_cor = "#000000"
-                    html_bloco += f"<span style='background-color:{bg_cor};color:#FFF;border-radius:4px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;'>{n}</span>"
-                html_bloco += "</div>"
-                linhas_html.append(html_bloco)
-            st.markdown("".join(linhas_html), unsafe_allow_html=True)
-        else:
-            st.info("Aguardando dados...")
+  with col_g3:
+        st.markdown(f"### 📊 MAPA DE CALOR (MESA)")
+        
+        matriz_freq = {n: amostra.count(n) for n in range(0, 37)}
+        
+        grid_mesa = [
+            [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
+            [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+            [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
+        ]
+        
+        z_values = [[matriz_freq[num] for num in lin] for lin in grid_mesa]
+        text_values = [[f"{num}<br>({matriz_freq[num]}x)" for num in lin] for lin in grid_mesa]
+        
+        fig_heat = go.Figure(data=go.Heatmap(
+            z=z_values,
+            text=text_values,
+            texttemplate="%{text}",
+            colorscale='Viridis',
+            showscale=False
+        ))
+        
+        fig_heat.update_layout(
+            title=f"Frequência na Mesa (Zero = {matriz_freq[0]}x)",
+            template="plotly_dark",
+            height=280,
+            margin=dict(l=5, r=5, t=30, b=5),
+            xaxis=dict(showticklabels=False),
+            yaxis=dict(showticklabels=False)
+        )
+        
+        st.plotly_chart(fig_heat, use_container_width=True)
 
 # ==========================================
 # 🏆 RANKING DOS PADRÕES
