@@ -779,7 +779,7 @@ else:
 # ==========================================
 if st.session_state.historico:
     st.markdown("---")
-    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 200)")
+    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 100)")
     
     total_disponivel = len(st.session_state.historico)
     max_amostra = min(200, total_disponivel)
@@ -841,7 +841,7 @@ if st.session_state.historico:
         st.plotly_chart(fig_adv, use_container_width=True)
         
         st.caption(f"**Par:** {round((par/total_amostra)*100)}% | **Ímpar:** {round((impar/total_amostra)*100)}% | **1-18:** {round((baixas/total_amostra)*100)}% | **19-36:** {round((altas/total_amostra)*100)}%")
-      
+
     with col_g3:
         st.markdown(f"### 📊 MAPA DE CALOR (MESA)")
         
