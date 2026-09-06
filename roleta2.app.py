@@ -944,7 +944,7 @@ if st.session_state.get("historico", []):
 
  # Ranking dos Tiers
     tiers_atuais, df_rank = obter_tiers_cache()
-    with st.expander("🏆 Ranking dos Padrões (Últimas 80 Rodadas)", expanded=False):
+    with st.expander("🏆 Ranking dos Padrões (Últimas 30 Rodadas)", expanded=False):
         if not df_rank.empty:
             st.dataframe(df_rank, use_container_width=True, hide_index=True)
         else:
