@@ -977,6 +977,7 @@ if qtd >= 20:
 
 st.markdown(html_racetrack, unsafe_html=True)
 st.caption("🌡️ Distribuição Racetrack | As cores esquentam dinamicamente conforme a frequência das últimas 200 rodadas.")
+
 else:
     st.info(f"Dados insuficientes para mapa de calor no Racetrack ({qtd}/20)")
 
