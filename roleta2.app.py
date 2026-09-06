@@ -732,8 +732,8 @@ else:
                 st.success(msg)
             else:
                 st.error(msg)
-else:
-    st.info("Aguardando dados da API ou inserção manual no painel lateral...")
+            else:
+        st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # Tabela Analítica
 if st.session_state.historico:
