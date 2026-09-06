@@ -863,23 +863,35 @@ if qtd >= 20:
 else:
     st.info(f"Dados insuficientes para mapa de calor no Racetrack ({qtd}/20)")
 
-# === RANKING DE PADRÕES ===
+# Verifica se existe histórico antes de renderizar as estatísticas
+if st.session_state.get("historico", []):
+
+    # === RANKING DE PADRÕES ===
     st.markdown("---")
     st.subheader("🏆 Ranking de Padrões — Taxa de Acerto Histórica")
     tiers, df_rank = obter_tiers_cache()
+    
     if not df_rank.empty:
+        # Ajusta os valores da coluna de porcentagem para garantir compatibilidade com o ProgressColumn
+        df_display = df_rank.copy()
+        
         st.dataframe(
-            df_rank,
+            df_display,
             column_config={
                 "Padrão": st.column_config.TextColumn("Padrão Detectado"),
                 "Total": st.column_config.NumberColumn("Sinais Gerados"),
                 "Acertos": st.column_config.NumberColumn("Acertos Confirmados"),
                 "Taxa de Acerto (%)": st.column_config.ProgressColumn(
-                    "Taxa de Acerto", format="%.1f%%", min_value=0, max_value=100
+                    "Taxa de Acerto", 
+                    format="%.1f%%", 
+                    min_value=0, 
+                    max_value=100
                 )
             },
-            use_container_width=True, hide_index=True
+            use_container_width=True, 
+            hide_index=True
         )
+        
         c_tier1, c_tier2, c_tier3, c_tier4 = st.columns(4)
         c_tier1.info(f"👑 **Elite Top 3:** {', '.join(tiers.get('ELITE_TOP_3', [])) or '—'}")
         c_tier2.success(f"🥇 **Ouro Top 5:** {', '.join(tiers.get('SELECAO_OURO_TOP_5', [])) or '—'}")
@@ -891,14 +903,21 @@ else:
     # === DESEMPENHO DAS ESTRATÉGIAS ===
     st.markdown("---")
     st.subheader("📊 Desempenho das Estratégias (Últimas 30 rodadas)")
+    
+    # Obtém métricas com tratamento padrão caso ainda não tenham sido calculadas
+    score_dinamico = globals().get("score_dinamico", 0)
+    score_brk = globals().get("score_brk", 0)
+    seco_dinamico = globals().get("seco_dinamico", 0)
+    seco_brk = globals().get("seco_brk", 0)
+
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("🎯 Dinâmico", f"{score_dinamico}%")
     col2.metric("🔷 BRK Fixo", f"{score_brk}%")
     col3.metric("⚡ Tiro Seco Din", f"{seco_dinamico}%")
     col4.metric("⚡ Tiro Seco BRK", f"{seco_brk}%")
 
-    st.markdown(f"""
-    > **Método de cálculo:** Taxa de acerto real das sugestões de puxadores nas últimas 30 rodadas.
+    st.markdown("""
+    > **Método de cálculo:** Taxa de acerto real das sugestões de puxadores nas últimas 30 rodadas.  
     > *Dinâmico* = baseado nas últimas 100 rodadas | *BRK* = tabela fixa
     """)
 
