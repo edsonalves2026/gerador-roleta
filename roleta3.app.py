@@ -743,7 +743,7 @@ if st.session_state.historico:
         else:
             st.info(f"Dados insuficientes ({qtd}/12)")
 
-        with c3:
+    with c3:
         st.markdown("### 🧭 Setores da Roleta — Últimas 200 rodadas")
         if qtd >= 10:
             # Usa EXATAMENTE as últimas 200 rodadas, na ordem em que saíram
@@ -795,7 +795,7 @@ if st.session_state.historico:
             st.dataframe(df_setores, use_container_width=True, hide_index=True)
         else:
             st.info(f"Dados insuficientes ({qtd}/10)")
-
+    
     # === MAPA DE CALOR ===
     st.markdown("---")
     st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro")
