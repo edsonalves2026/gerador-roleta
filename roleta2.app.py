@@ -1,175 +1,172 @@
-import os
-import time
-import requests
-import numpy as np
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import requests
+import random
+import time
+import plotly.express as px
 import plotly.graph_objects as go
+from streamlit_autorefresh import st_autorefresh
 import streamlit.components.v1 as components
 
 # ==========================================
-# CONFIGURAÇÃO DA PÁGINA STREAMLIT
+# 1. CONFIGURAÇÃO E CREDENCIAIS SEGURAS
 # ==========================================
-st.set_page_config(
-    page_title="Roulette Analytics & Signals",
-    page_icon="🎰",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Radar de Roleta Pro - Motor Avançado", layout="wide")
+st_autorefresh(interval=15000, key="autoupdate_roleta")
+TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "")
 
 # ==========================================
-# CONSTANTES E MAPEAMENTOS DA ROLETA
+# ⬡ MATRIZ PRINCIPAL — EXATAMENTE DO CÓDIGO 1 ⬡
 # ==========================================
-NUMEROS_VERMELHOS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
-NUMEROS_PRETO = {2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35}
-
-# Ordem real dos números na roleta europeia
 CILINDRO_EUROPEU = [
-    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5,
-    24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
+    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
+    5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
 ]
 
-# Dicionário com URLs/IDs típicos de roletas para integração via API
-ROLETA_CONFIG = {
-    "Immersive Roulette": {"id": "immersive", "provider": "evolution"},
-    "VIP Roulette": {"id": "vip", "provider": "evolution"},
-    "Speed Roulette": {"id": "speed", "provider": "evolution"},
-    "Auto-Roulette": {"id": "autoroulette", "provider": "evolution"},
-    "Brazilian Roulette": {"id": "roleta_brasileira", "provider": "evolution"}
+SETORES_ROLETA = {
+    "VOISINS_DU_ZERO": [22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25],
+    "TIERS_DU_CYLINDRE": [27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33],
+    "ORPHELINS": [1, 20, 14, 31, 9, 17, 34, 6],
+    "ZERO_SPIEL": [12, 35, 3, 26, 0, 32, 15]
 }
 
+CAMUFLADOS_BASE = {
+    2: [11, 20, 29], 3: [12, 21, 30], 4: [13, 22, 31],
+    5: [14, 23, 32], 6: [15, 24, 33], 7: [16, 25, 34],
+    8: [17, 26, 35], 9: [18, 27, 36], 10: [1, 19, 28]
+}
+
+GRUPO_FANTASMA = {0, 2, 4, 6, 7, 11, 13, 14, 15, 17, 18, 19, 20, 21, 22, 25, 27, 28, 29, 31, 32, 34, 36}
+
+TABELA_OCULTOS_BRK = {
+    1: [1, 10, 19, 28, 34],
+    2: [2, 11, 20, 29, 24, 35],
+    3: [3, 12, 21, 30, 36, 14, 25],
+    4: [4, 13, 22, 31, 26, 15],
+    5: [5, 14, 23, 32, 16, 27],
+    6: [6, 15, 24, 33, 17],
+    7: [7, 16, 25, 34, 14, 29],
+    8: [8, 17, 26, 35, 19],
+    9: [9, 18, 27, 36],
+    10: [0, 5, 20, 30, 19, 28]
+}
+
+TABELA_PUXADORES_FIXA_BRK = {
+    0:  [33, 11, 21, 34], 1:  [20, 22, 32, 12], 2:  [36, 5, 7, 33],
+    3:  [0, 7, 20, 10],   4:  [5, 10, 7, 3],    5:  [3, 6, 9, 27],
+    6:  [7, 4, 17, 27],   7:  [8, 4, 18, 28],   8:  [3, 6, 19, 29],
+    9:  [4, 0, 10, 20],   10: [1, 2, 18, 28],   11: [3, 6, 24, 31],
+    12: [31, 4, 33, 35],  13: [5, 3, 7, 34],    14: [30, 6, 4, 0],
+    15: [21, 7, 8, 19],   16: [20, 8, 6, 7],    17: [11, 7, 9, 28],
+    18: [10, 8, 20, 29],  19: [4, 2, 17, 30],   20: [16, 3, 12, 27],
+    21: [24, 4, 26, 2],   22: [5, 26, 32, 21],  23: [6, 2, 22, 26],
+    24: [5, 7, 21, 29],   25: [8, 4, 13, 24],   26: [9, 5, 29, 17],
+    27: [10, 6, 14, 7],   28: [11, 7, 14, 30],  29: [0, 15, 3, 29],
+    30: [13, 33, 35, 0],  31: [34, 31, 3, 0],   32: [6, 30, 1, 0],
+    33: [7, 32, 1, 14],   34: [5, 2, 31, 33],   35: [6, 9, 3, 0],
+    36: [11, 13, 27, 30]
+}
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+]
+
+URLS_ROLETAS = {
+    "Cassino ao Vivo Immersive Roulette": {
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/dfa678e4-4452-4723-a97d-f3703302d5cc/history?timezone=America%2FSao_Paulo&subject=filter&limit=1000"
+    },
+    "Cassino ao Vivo Swedish Roulette": {
+        "api_endpoint": "https://api.core.public.tipminer.com/v1/roulette/rounds/9a11309a-4cfa-40d2-b479-a28a01c6ee13/history?timezone=America%2FSao_Paulo&subject=filter&limit=1000"
+    }
+}
+
+NUMEROS_VERMELHOS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
+
 # ==========================================
-# INICIALIZAÇÃO DO SESSION STATE
+# 2. FUNÇÕES AUXILIARES E CÁLCULO ESTATÍSTICO
 # ==========================================
-if "historico" not in st.session_state:
-    st.session_state.historico = []
-
-if "sinal_ativo" not in st.session_state:
-    st.session_state.sinal_ativo = False
-
-if "tentativa_atual" not in st.session_state:
-    st.session_state.tentativa_atual = 0
-
-if "alvos_sinal" not in st.session_state:
-    st.session_state.alvos_sinal = []
-
-if "telegram_token" not in st.session_state:
-    st.session_state.telegram_token = ""
-
-if "telegram_chat_id" not in st.session_state:
-    st.session_state.telegram_chat_id = ""
-
-# ==========================================
-# FUNÇÕES AUXILIARES DE CÁLCULO E API
-# ==========================================
-def calcular_estatisticas(historico):
-    """Calcula estatísticas de Dúzias, Colunas, Paridade, Altas/Baixas."""
-    if not historico:
+def calcular_estatisticas(amostra):
+    if not amostra:
         return {}
-    
-    total = len(historico)
-    d1 = sum(1 for n in historico if 1 <= n <= 12)
-    d2 = sum(1 for n in historico if 13 <= n <= 24)
-    d3 = sum(1 for n in historico if 25 <= n <= 36)
-
-    c1 = sum(1 for n in historico if n > 0 and n % 3 == 1)
-    c2 = sum(1 for n in historico if n > 0 and n % 3 == 2)
-    c3 = sum(1 for n in historico if n > 0 and n % 3 == 0)
-
-    par = sum(1 for n in historico if n > 0 and n % 2 == 0)
-    impar = sum(1 for n in historico if n > 0 and n % 2 != 0)
-
-    baixas = sum(1 for n in historico if 1 <= n <= 18)
-    altas = sum(1 for n in historico if 19 <= n <= 36)
-
     return {
-        "d1": d1, "d2": d2, "d3": d3,
-        "c1": c1, "c2": c2, "c3": c3,
-        "par": par, "impar": impar,
-        "baixas": baixas, "altas": altas,
-        "total": total
+        'd1': sum(1 for n in amostra if 1 <= n <= 12),
+        'd2': sum(1 for n in amostra if 13 <= n <= 24),
+        'd3': sum(1 for n in amostra if 25 <= n <= 36),
+        'c1': sum(1 for n in amostra if n > 0 and n % 3 == 1),
+        'c2': sum(1 for n in amostra if n > 0 and n % 3 == 2),
+        'c3': sum(1 for n in amostra if n > 0 and n % 3 == 0),
+        'par': sum(1 for n in amostra if n > 0 and n % 2 == 0),
+        'impar': sum(1 for n in amostra if n % 2 != 0),
+        'baixas': sum(1 for n in amostra if 1 <= n <= 18),
+        'altas': sum(1 for n in amostra if 19 <= n <= 36)
     }
 
-def buscar_dados_roleta(roleta_nome):
-    """
-    Simulação/Fetch de dados da API.
-    Em um cenário de produção real, conecta ao endpoint de dados da roleta.
-    """
-    # Gerador mock para garantia de funcionamento na ausência do backend ao vivo
-    import random
-    num_sorteado = random.choice(CILINDRO_EUROPEU)
-    return num_sorteado
-
-def enviar_telegram(token, chat_id, mensagem):
-    """Envia alerta para o canal/grupo do Telegram informado."""
-    if not token or not chat_id:
-        return False, "Token ou Chat ID ausente."
+def buscar_puxadores_dinamicos(numero_alvo, historico, limite_amostra=100):
+    amostra = historico[:limite_amostra]
+    if len(amostra) < 2:
+        return []
     
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": mensagem, "parse_mode": "HTML"}
-    try:
-        resp = requests.post(url, json=payload, timeout=5)
-        if resp.status_code == 200:
-            return True, "Mensagem enviada com sucesso!"
-        else:
-            return False, f"Erro {resp.status_code}: {resp.text}"
-    except Exception as e:
-        return False, f"Falha na conexão: {e}"
+    subsequentes = [amostra[i-1] for i in range(1, len(amostra)) if amostra[i] == numero_alvo]
+    if not subsequentes:
+        return []
+    
+    contagem = pd.Series(subsequentes).value_counts()
+    return contagem.head(4).index.tolist()
+
+def calcular_scores_reais(historico, limite=30):
+    if len(historico) < limite:
+        return 50.0, 50.0, 0.0, 0.0
+    amostra = historico[:limite]
+    acertos_din = acertos_brk = tiros_din = tiros_brk = 0
+    for i in range(len(amostra) - 1):
+        ultimo = amostra[i+1]
+        proximo = amostra[i]
+        pux_din = buscar_puxadores_dinamicos(ultimo, amostra[i+1:], limite_amostra=100)
+        if pux_din:
+            tiros_din += 1
+            if proximo in pux_din[:4]:
+                acertos_din += 1
+        pux_brk = TABELA_PUXADORES_FIXA_BRK.get(ultimo, [])
+        if pux_brk:
+            tiros_brk += 1
+            if proximo in pux_brk[:4]:
+                acertos_brk += 1
+    score_din = round(100 * acertos_din / tiros_din, 1) if tiros_din else 50.0
+    score_brk = round(100 * acertos_brk / tiros_brk, 1) if tiros_brk else 50.0
+    seco_din = round(score_din * 0.45, 1)
+    seco_brk = round(score_brk * 0.40, 1)
+    return score_din, score_brk, seco_din, seco_brk
 
 # ==========================================
-# PAINEL OPERACIONAL (SIDEBAR)
+# 3. PAINEL LATERAL (SIDEBAR) RESTAURADO
 # ==========================================
-st.sidebar.title("⚙️ Painel de Operação")
+st.sidebar.header("🎛️ Painel de Operações")
 
-st.sidebar.subheader("🎯 Seleção de Roleta")
 roleta_selecionada = st.sidebar.selectbox(
-    "Escolha a Mesa:",
-    options=list(ROLETA_CONFIG.keys()),
-    index=0
+    "Selecione a Roleta:",
+    options=list(URLS_ROLETAS.keys()),
+    key="roleta_selecionada"
 )
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("🔄 Atualização de Dados")
+st.sidebar.subheader("📥 Entrada Manual / Controle")
 
-col_btn1, col_btn2 = st.sidebar.columns(2)
+novo_numero = st.sidebar.number_input("Adicionar Número Manual:", min_value=0, max_value=36, step=1)
+if st.sidebar.button("➕ Inserir Número"):
+    if "historico" not in st.session_state:
+        st.session_state.historico = []
+    st.session_state.historico.insert(0, int(novo_numero))
+    st.sidebar.success(f"Número {novo_numero} adicionado!")
 
-with col_btn1:
-    if st.button("📥 Capturar (1x)", use_container_width=True):
-        novo_num = buscar_dados_roleta(roleta_selecionada)
-        st.session_state.historico.insert(0, novo_num)
-        st.sidebar.success(f"Adicionado: {novo_num}")
-
-with col_btn2:
-    if st.button("🎲 Gerar 80 Rodadas", use_container_width=True):
-        import random
-        st.session_state.historico = [random.choice(CILINDRO_EUROPEU) for _ in range(80)]
-        st.sidebar.success("80 números carregados!")
-
-if st.sidebar.button("🗑️ Limpar Histórico", use_container_width=True):
+if st.sidebar.button("🗑️ Limpar Histórico"):
     st.session_state.historico = []
-    st.sidebar.warning("Histórico limpo!")
+    st.sidebar.info("Histórico redefinido.")
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("✈️ Configuração Telegram")
-st.session_state.telegram_token = st.sidebar.text_input("Bot Token:", value=st.session_state.telegram_token, type="password")
-st.session_state.telegram_chat_id = st.sidebar.text_input("Chat ID:", value=st.session_state.telegram_chat_id)
-
-if st.sidebar.button("📲 Testar Alerta Telegram", use_container_width=True):
-    ok, msg = enviar_telegram(
-        st.session_state.telegram_token,
-        st.session_state.telegram_chat_id,
-        "🚨 <b>TESTE DE ALERTA ROULETTE ANALYTICS</b>\n\nConexão estabelecida com sucesso!"
-    )
-    if ok:
-        st.sidebar.success(msg)
-    else:
-        st.sidebar.error(msg)
-
-# ==========================================
-# CORPO PRINCIPAL: CABEÇALHO & SINAIS
-# ==========================================
-st.title("🎰 Roulette Analytics & Signals System")
-st.markdown(f"**Mesa Conectada:** `{roleta_selecionada}` | **Total Registrado:** `{len(st.session_state.historico)} rodadas`")
+st.sidebar.caption("🤖 Atualização automática a cada 15 segundos.")
 
 # ==========================================
 # 9. ESTATÍSTICAS E MAPA DE CALOR
