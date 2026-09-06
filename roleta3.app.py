@@ -962,8 +962,7 @@ with st.expander("📖 Manual Completo do Sistema — Regras e Funcionamento", e
 # 📌 RODAPÉ
 # ==========================================
 st.markdown("---")
-st.caption("""
-⚡ Radar de Roleta Pro — Sistema TIRO CERTO + HEAD-SHOT com Score Ponderado
+st.caption(""")
 ✅ Validação BRK + Padrões Históricos + Ranking de Assertividade
 🔄 Atualização automática a cada 15s | 🤖 Alertas via Telegram | v3.0 Otimizado
 """)
