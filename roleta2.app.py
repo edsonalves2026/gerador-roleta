@@ -523,10 +523,10 @@ if st.session_state.historico:
 # 9. ESTATÍSTICAS E MAPA DE CALOR
 # ==========================================
 st.markdown("---")
-st.subheader("📈 Estatísticas — Últimas 200 Rodadas")
+st.subheader("📈 Estatísticas — Últimas 80 Rodadas")
 
 if st.session_state.historico:
-    ultimas = st.session_state.historico[:200]
+    ultimas = st.session_state.historico[:80]
     qtd = len(ultimas)
     c1, c2, c3 = st.columns(3)
     
@@ -574,9 +574,9 @@ if st.session_state.historico:
             st.info(f"Dados insuficientes ({qtd}/12)")
             
     with c3:
-        st.markdown("### 🧭 Setores da Roleta — Últimas 200 rodadas")
+        st.markdown("### 🧭 Setores da Roleta — Últimas 80 rodadas")
         if qtd >= 10 and 'SETORES_ROLETA' in globals():
-            amostra_setores = st.session_state.historico[:200]
+            amostra_setores = st.session_state.historico[:80]
             contagem_setores = {}
             for nome, nums in SETORES_ROLETA.items():
                 contagem_setores[nome] = sum(1 for n in amostra_setores if n in nums)
@@ -615,8 +615,8 @@ if st.session_state.historico:
 st.markdown("---")
 st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro (Racetrack)")
 
-ultimas_200 = st.session_state.historico[:200]
-qtd = len(ultimas_200)
+ultimas_200 = st.session_state.historico[:80]
+qtd = len(ultimas_80)
 
 if qtd >= 20:
     try:
