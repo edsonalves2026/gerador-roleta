@@ -574,26 +574,55 @@ if st.session_state.historico:
             st.info(f"Dados insuficientes ({qtd}/12)")
             
    with c3:
-        st.markdown("### 🎨 Mapa de Cores — Últimas 100")
-        if qtd > 0:
-            linhas_html = []
-            amostra_mapa = ultimas[:100]
-            for i in range(0, len(amostra_mapa), 10):
-                bloco = amostra_mapa[i:i+10]
-                html_bloco = "<div style='display:flex;gap:4px;margin:3px 0;'>"
-                for n in bloco:
-                    if n == 0:
-                        bg_cor = "#00AA00"
-                    elif n in NUMEROS_VERMELHOS:
-                        bg_cor = "#FF2222"
-                    else:
-                        bg_cor = "#000000"
-                    html_bloco += f"<span style='background-color:{bg_cor};color:#FFF;border-radius:4px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;'>{n}</span>"
-                html_bloco += "</div>"
-                linhas_html.append(html_bloco)
-            st.markdown("".join(linhas_html), unsafe_allow_html=True)
-        else:
-            st.info("Aguardando dados...")
+    st.markdown("### 🎨 Mapa de Cores — Últimas 100")
+    
+    if qtd > 0:
+        amostra_mapa = ultimas[:100]
+        
+        # Opções de formato para os seletores (Bolinha, Quadrado, Arredondado)
+        formato = st.selectbox(
+            "Formato dos ícones",
+            options=["Círculo", "Quadrado", "Arredondado"],
+            index=0,
+            key="fmt_mapa_cores"
+        )
+        
+        # Define o raio da borda conforme o formato escolhido
+        if formato == "Círculo":
+            border_radius = "50%"
+        elif formato == "Arredondado":
+            border_radius = "6px"
+        else: # Quadrado
+            border_radius = "0px"
+
+        linhas_html = []
+        for i in range(0, len(amostra_mapa), 10):
+            bloco = amostra_mapa[i:i+10]
+            spans_bloco = []
+            
+            for n in bloco:
+                if n == 0:
+                    bg_cor = "#00AA00" # Verde
+                elif n in NUMEROS_VERMELHOS:
+                    bg_cor = "#FF2222" # Vermelho
+                else:
+                    bg_cor = "#111111" # Preto
+                
+                spans_bloco.append(
+                    f'<span style="background-color:{bg_cor};color:#FFF;border-radius:{border_radius};'
+                    f'width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;'
+                    f'font-size:11px;font-weight:bold;margin:2px;box-sizing:border-box;">{n}</span>'
+                )
+            
+            linha = f'<div style="display:flex;flex-wrap:nowrap;margin-bottom:2px;">{"".join(spans_bloco)}</div>'
+            linhas_html.append(linha)
+
+        # Envelopa tudo em uma única div limpa sem quebras de linha para o Streamlit não falhar
+        mapa_completo_html = f'<div style="background:#0d0e12;padding:10px;border-radius:8px;border:1px solid #333;">{"".join(linhas_html)}</div>'
+        
+        st.markdown(mapa_completo_html, unsafe_allow_html=True)
+    else:
+        st.info("Aguardando dados...")
             
 # ==========================================
 # MAPA DE CALOR (LAYOUT RACETRACK / PISTA)
