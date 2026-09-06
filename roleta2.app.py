@@ -785,7 +785,7 @@ if st.session_state.historico:
         else:
             st.info(f"Dados insuficientes ({qtd}/10)")
     
-    # === MAPA DE CALOR (LAYOUT RACETRACK / PISTA) ===
+# === MAPA DE CALOR (LAYOUT RACETRACK / PISTA) ===
 st.markdown("---")
 st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro (Racetrack)")
 
@@ -796,7 +796,7 @@ if qtd >= 20:
     cont = pd.Series(ultimas_200).value_counts().reindex(range(37), fill_value=0)
     max_freq = max(cont.values) if max(cont.values) > 0 else 1
 
-    # Mapeamento do gradiente térmico para cada número
+    # Mapeamento do gradiente térmico
     def get_cor_calor(num):
         freq = cont[num]
         intensidade = freq / max_freq
@@ -809,7 +809,7 @@ if qtd >= 20:
         else:
             return f"rgba(80, 60, 20, {0.35 + intensidade*0.30})"
 
-    # Definição das posições e dados do Racetrack conforme a imagem
+    # Mapeamento das casas do Racetrack conforme imagem de referência
     topo = [
         {"n": 5, "f": cont[5], "bg": get_cor_calor(5)},
         {"n": 24, "f": cont[24], "bg": get_cor_calor(24)},
@@ -859,7 +859,11 @@ if qtd >= 20:
         {"n": 0, "f": cont[0], "bg": get_cor_calor(0)},
     ]
 
-    # Renderização HTML/CSS Responsiva do Oval Racetrack
+    # Construção prévia das células
+    html_topo = "".join([f'<div class="cell" style="background:{i["bg"]};">{i["n"]}<span class="cell-sub">({i["f"]})</span></div>' for i in topo])
+    html_base = "".join([f'<div class="cell" style="background:{i["bg"]};">{i["n"]}<span class="cell-sub">({i["f"]})</span></div>' for i in base])
+
+    # Template HTML/CSS limpo
     html_racetrack = f"""
     <style>
         .racetrack-container {{
@@ -946,9 +950,9 @@ if qtd >= 20:
             </div>
 
             <!-- Linha Superior -->
-            {"".join([f'<div class="cell" style="background:{item["bg"]};">{item["n"]}<span class="cell-sub">({item["f"]})</span></div>' for item in topo])}
+            {html_topo}
 
-            <!-- Núcleo do Racetrack (Setores Internos) -->
+            <!-- Setores Centrais -->
             <div class="center-area">
                 <div class="sector-title">TIER</div>
                 <div class="sector-title">ORPHELINS</div>
@@ -957,7 +961,7 @@ if qtd >= 20:
             </div>
 
             <!-- Linha Inferior -->
-            {"".join([f'<div class="cell" style="background:{item["bg"]};">{item["n"]}<span class="cell-sub">({item["f"]})</span></div>' for item in base])}
+            {html_base}
 
             <!-- Curva Direita -->
             <div class="curva-col" style="grid-column: 18; grid-row: 1 / span 3;">
@@ -968,15 +972,15 @@ if qtd >= 20:
                     {curva_dir[1]['n']}<span class="cell-sub">({curva_dir[1]['f']})</span>
                 </div>
                 <div class="cell" style="background:{curva_dir[2]['bg']}; border-bottom-right-radius: 20px;">
-                    {curva_dir[0]['n'] if curva_dir[2]['n']==0 else curva_dir[2]['n']}<span class="cell-sub">({curva_dir[2]['f']})</span>
+                    {curva_dir[2]['n']}<span class="cell-sub">({curva_dir[2]['f']})</span>
                 </div>
             </div>
         </div>
     </div>
     """
 
-st.markdown(html_racetrack, unsafe_html=True)
-st.caption("🌡️ Distribuição Racetrack | As cores esquentam dinamicamente conforme a frequência das últimas 200 rodadas.")
+    st.markdown(html_racetrack, unsafe_html=True)
+    st.caption("🌡️ Distribuição Racetrack | As cores esquentam dinamicamente conforme a frequência das últimas 200 rodadas.")
 else:
     st.info(f"Dados insuficientes para mapa de calor no Racetrack ({qtd}/20)")
 
