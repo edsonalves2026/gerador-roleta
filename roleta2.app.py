@@ -785,87 +785,200 @@ if st.session_state.historico:
         else:
             st.info(f"Dados insuficientes ({qtd}/10)")
     
-    # === MAPA DE CALOR ===
-        st.markdown("---")
-    st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro")
-    if qtd >= 20:
-        cont = pd.Series(ultimas).value_counts().reindex(range(37), fill_value=0)
-        max_freq = max(cont.values) if max(cont.values) > 0 else 1
+    # === MAPA DE CALOR (LAYOUT RACETRACK / PISTA) ===
+st.markdown("---")
+st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro (Racetrack)")
 
-        # Ordem EXATA do cilindro europeu dividida em 3 linhas
-        ordem = CILINDRO_EUROPEU
-        linhas = [ordem[0:13], ordem[13:26], ordem[26:37]]
+ultimas_200 = st.session_state.historico[:200]
+qtd = len(ultimas_200)
 
-        for linha in linhas:
-            cols = st.columns(len(linha))
-            for c, num in zip(cols, linha):
-                freq = cont[num]
-                intensidade = freq / max_freq if max_freq > 0 else 0
-                
-                # Gradiente: vermelho quente → laranja → amarelo → marrom → frio
-                if intensidade > 0.75:
-                    cor_fundo = f"rgba(220, 40, 40, {0.6 + intensidade*0.4})"
-                elif intensidade > 0.50:
-                    cor_fundo = f"rgba(230, 120, 20, {0.5 + intensidade*0.4})"
-                elif intensidade > 0.25:
-                    cor_fundo = f"rgba(210, 160, 30, {0.4 + intensidade*0.4})"
-                else:
-                    cor_fundo = f"rgba(100, 80, 20, {0.3 + intensidade*0.3})"
-                
-                cor_texto = "white" if intensidade > 0.4 else "#ffdd88"
-                c.markdown(f"""
-                <div style='background-color:{cor_fundo}; color:{cor_texto}; 
-                text-align:center; padding:10px 4px; border-radius:6px; 
-                font-weight:bold; font-size:16px; line-height:1.2;'>
-                <b>{num}</b><br><span style='font-size:11px; opacity:0.8;'>({freq})</span>
+if qtd >= 20:
+    cont = pd.Series(ultimas_200).value_counts().reindex(range(37), fill_value=0)
+    max_freq = max(cont.values) if max(cont.values) > 0 else 1
+
+    # Mapeamento do gradiente térmico para cada número
+    def get_cor_calor(num):
+        freq = cont[num]
+        intensidade = freq / max_freq
+        if intensidade > 0.75:
+            return f"rgba(220, 40, 40, {0.65 + intensidade*0.35})"
+        elif intensidade > 0.50:
+            return f"rgba(230, 120, 20, {0.55 + intensidade*0.35})"
+        elif intensidade > 0.25:
+            return f"rgba(210, 160, 30, {0.45 + intensidade*0.35})"
+        else:
+            return f"rgba(80, 60, 20, {0.35 + intensidade*0.30})"
+
+    # Definição das posições e dados do Racetrack conforme a imagem
+    topo = [
+        {"n": 5, "f": cont[5], "bg": get_cor_calor(5)},
+        {"n": 24, "f": cont[24], "bg": get_cor_calor(24)},
+        {"n": 16, "f": cont[16], "bg": get_cor_calor(16)},
+        {"n": 33, "f": cont[33], "bg": get_cor_calor(33)},
+        {"n": 1, "f": cont[1], "bg": get_cor_calor(1)},
+        {"n": 20, "f": cont[20], "bg": get_cor_calor(20)},
+        {"n": 14, "f": cont[14], "bg": get_cor_calor(14)},
+        {"n": 31, "f": cont[31], "bg": get_cor_calor(31)},
+        {"n": 9, "f": cont[9], "bg": get_cor_calor(9)},
+        {"n": 22, "f": cont[22], "bg": get_cor_calor(22)},
+        {"n": 18, "f": cont[18], "bg": get_cor_calor(18)},
+        {"n": 29, "f": cont[29], "bg": get_cor_calor(29)},
+        {"n": 7, "f": cont[7], "bg": get_cor_calor(7)},
+        {"n": 28, "f": cont[28], "bg": get_cor_calor(28)},
+        {"n": 12, "f": cont[12], "bg": get_cor_calor(12)},
+        {"n": 35, "f": cont[35], "bg": get_cor_calor(35)},
+    ]
+
+    base = [
+        {"n": 30, "f": cont[30], "bg": get_cor_calor(30)},
+        {"n": 11, "f": cont[11], "bg": get_cor_calor(11)},
+        {"n": 36, "f": cont[36], "bg": get_cor_calor(36)},
+        {"n": 13, "f": cont[13], "bg": get_cor_calor(13)},
+        {"n": 27, "f": cont[27], "bg": get_cor_calor(27)},
+        {"n": 6, "f": cont[6], "bg": get_cor_calor(6)},
+        {"n": 34, "f": cont[34], "bg": get_cor_calor(34)},
+        {"n": 17, "f": cont[17], "bg": get_cor_calor(17)},
+        {"n": 25, "f": cont[25], "bg": get_cor_calor(25)},
+        {"n": 2, "f": cont[2], "bg": get_cor_calor(2)},
+        {"n": 21, "f": cont[21], "bg": get_cor_calor(21)},
+        {"n": 4, "f": cont[4], "bg": get_cor_calor(4)},
+        {"n": 19, "f": cont[19], "bg": get_cor_calor(19)},
+        {"n": 15, "f": cont[15], "bg": get_cor_calor(15)},
+        {"n": 32, "f": cont[32], "bg": get_cor_calor(32)},
+    ]
+
+    curva_esq = [
+        {"n": 10, "f": cont[10], "bg": get_cor_calor(10)},
+        {"n": 23, "f": cont[23], "bg": get_cor_calor(23)},
+        {"n": 8, "f": cont[8], "bg": get_cor_calor(8)},
+    ]
+
+    curva_dir = [
+        {"n": 3, "f": cont[3], "bg": get_cor_calor(3)},
+        {"n": 26, "f": cont[26], "bg": get_cor_calor(26)},
+        {"n": 0, "f": cont[0], "bg": get_cor_calor(0)},
+    ]
+
+    # Renderização HTML/CSS Responsiva do Oval Racetrack
+    html_racetrack = f"""
+    <style>
+        .racetrack-container {{
+            width: 100%;
+            max-width: 1100px;
+            margin: 0 auto;
+            background: #0d0e12;
+            padding: 15px;
+            border-radius: 40px;
+            border: 2px solid #333;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            font-family: Arial, sans-serif;
+        }}
+        .racetrack-grid {{
+            display: grid;
+            grid-template-columns: 80px repeat(16, 1fr) 80px;
+            grid-template-rows: auto auto auto;
+            gap: 2px;
+            text-align: center;
+        }}
+        .cell {{
+            padding: 6px 2px;
+            border: 1px solid #222;
+            border-radius: 4px;
+            color: #fff;
+            font-weight: bold;
+            font-size: 13px;
+            min-height: 42px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }}
+        .cell-sub {{
+            font-size: 9px;
+            opacity: 0.8;
+            font-weight: normal;
+        }}
+        .center-area {{
+            grid-column: 2 / 18;
+            grid-row: 2;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            background: rgba(25, 28, 36, 0.9);
+            border: 1px solid #444;
+            border-radius: 8px;
+            color: #aaa;
+            font-weight: bold;
+            font-size: 12px;
+            letter-spacing: 1px;
+            padding: 10px 0;
+            margin: 2px 0;
+        }}
+        .sector-title {{
+            flex: 1;
+            text-align: center;
+            border-right: 1px solid #333;
+        }}
+        .sector-title:last-child {{
+            border-right: none;
+        }}
+        .curva-col {{
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 2px;
+        }}
+    </style>
+
+    <div class="racetrack-container">
+        <div class="racetrack-grid">
+            <!-- Curva Esquerda -->
+            <div class="curva-col" style="grid-column: 1; grid-row: 1 / span 3;">
+                <div class="cell" style="background:{curva_esq[0]['bg']}; border-top-left-radius: 20px;">
+                    {curva_esq[0]['n']}<span class="cell-sub">({curva_esq[0]['f']})</span>
                 </div>
-                """, unsafe_allow_html=True)
+                <div class="cell" style="background:{curva_esq[1]['bg']};">
+                    {curva_esq[1]['n']}<span class="cell-sub">({curva_esq[1]['f']})</span>
+                </div>
+                <div class="cell" style="background:{curva_esq[2]['bg']}; border-bottom-left-radius: 20px;">
+                    {curva_esq[2]['n']}<span class="cell-sub">({curva_esq[2]['f']})</span>
+                </div>
+            </div>
 
-        st.caption("🌡️ Cor mais quente = maior frequência nas últimas 200 rodadas | Ordem exata do cilindro europeu")
-    else:
-        st.info(f"Dados insuficientes para mapa de calor ({qtd}/20)")
-        
-    # === RANKING DE PADRÕES ===
-    st.markdown("---")
-    st.subheader("🏆 Ranking de Padrões — Taxa de Acerto Histórica")
-    tiers, df_rank = obter_tiers_cache()
-    if not df_rank.empty:
-        st.dataframe(
-            df_rank,
-            column_config={
-                "Padrão": st.column_config.TextColumn("Padrão Detectado"),
-                "Total": st.column_config.NumberColumn("Sinais Gerados"),
-                "Acertos": st.column_config.NumberColumn("Acertos Confirmados"),
-                "Taxa de Acerto (%)": st.column_config.ProgressColumn(
-                    "Taxa de Acerto", format="%.1f%%", min_value=0, max_value=100
-                )
-            },
-            use_container_width=True, hide_index=True
-        )
-        c_tier1, c_tier2, c_tier3, c_tier4 = st.columns(4)
-        c_tier1.info(f"👑 **Elite Top 3:** {', '.join(tiers.get('ELITE_TOP_3', [])) or '—'}")
-        c_tier2.success(f"🥇 **Ouro Top 5:** {', '.join(tiers.get('SELECAO_OURO_TOP_5', [])) or '—'}")
-        c_tier3.warning(f"🥈 **Seleção Top 10:** {', '.join(tiers.get('SELECAO_TOP_10', [])) or '—'}")
-        c_tier4.info(f"🥉 **Radar Top 30:** {', '.join(tiers.get('RADAR_TOP_30', [])) or '—'}")
-    else:
-        st.info("Aguardando histórico mínimo para gerar ranking de padrões...")
+            <!-- Linha Superior -->
+            {"".join([f'<div class="cell" style="background:{item["bg"]};">{item["n"]}<span class="cell-sub">({item["f"]})</span></div>' for item in topo])}
 
-    # === DESEMPENHO DAS ESTRATÉGIAS ===
-    st.markdown("---")
-    st.subheader("📊 Desempenho das Estratégias (Últimas 30 rodadas)")
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🎯 Dinâmico", f"{score_dinamico}%")
-    col2.metric("🔷 BRK Fixo", f"{score_brk}%")
-    col3.metric("⚡ Tiro Seco Din", f"{seco_dinamico}%")
-    col4.metric("⚡ Tiro Seco BRK", f"{seco_brk}%")
+            <!-- Núcleo do Racetrack (Setores Internos) -->
+            <div class="center-area">
+                <div class="sector-title">TIER</div>
+                <div class="sector-title">ORPHELINS</div>
+                <div class="sector-title">VOISINS</div>
+                <div class="sector-title">ZERO</div>
+            </div>
 
-    st.markdown(f"""
-    > **Método de cálculo:** Taxa de acerto real das sugestões de puxadores nas últimas 30 rodadas.
-    > *Dinâmico* = baseado nas últimas 100 rodadas | *BRK* = tabela fixa
-    """)
+            <!-- Linha Inferior -->
+            {"".join([f'<div class="cell" style="background:{item["bg"]};">{item["n"]}<span class="cell-sub">({item["f"]})</span></div>' for item in base])}
 
+            <!-- Curva Direita -->
+            <div class="curva-col" style="grid-column: 18; grid-row: 1 / span 3;">
+                <div class="cell" style="background:{curva_dir[0]['bg']}; border-top-right-radius: 20px;">
+                    {curva_dir[0]['n']}<span class="cell-sub">({curva_dir[0]['f']})</span>
+                </div>
+                <div class="cell" style="background:{curva_dir[1]['bg']};">
+                    {curva_dir[1]['n']}<span class="cell-sub">({curva_dir[1]['f']})</span>
+                </div>
+                <div class="cell" style="background:{curva_dir[2]['bg']}; border-bottom-right-radius: 20px;">
+                    {curva_dir[0]['n'] if curva_dir[2]['n']==0 else curva_dir[2]['n']}<span class="cell-sub">({curva_dir[2]['f']})</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    """
+
+    st.markdown(html_racetrack, unsafe_html=True)
+    st.caption("🌡️ Distribuição Racetrack | As cores esquentam dinamicamente conforme a frequência das últimas 200 rodadas.")
 else:
-    st.info("ℹ️ Inicie a captura ou digite números manualmente para visualizar as estatísticas.")
+    st.info(f"Dados insuficientes para mapa de calor no Racetrack ({qtd}/20)")
 
 # ==========================================
 # 10. SINAL ATIVO — GALE & ACOMPANHAMENTO
