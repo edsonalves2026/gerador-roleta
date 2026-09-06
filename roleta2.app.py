@@ -574,10 +574,10 @@ if st.session_state.historico:
             st.info(f"Dados insuficientes ({qtd}/12)")
 
     with c3:
-        st.markdown("### 🎨 Mapa de Cores — Últimas 100")
+        st.markdown("### 🎨 Mapa de Cores — Últimas 80")
     
     if qtd > 0:
-        amostra_mapa = ultimas[:100]
+        amostra_mapa = ultimas[:80]
         
         # Opções de formato para os seletores (Bolinha, Quadrado, Arredondado)
         formato = st.selectbox(
