@@ -68,8 +68,6 @@ TABELA_PUXADORES_FIXA = {
     36: [11, 13, 27, 30]
 }
 
-NUMEROS_VERMELHOS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
-
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
@@ -86,7 +84,48 @@ URLS_ROLETAS = {
 }
 
 # ==========================================
-# 2. FUNÇÃO DE BUSCA DA API
+# 2. LÓGICA DE GERENCIAMENTO DE MODOS
+# ==========================================
+def determinar_modo_operacional(
+    score_dinamico,
+    score_brk,
+    seco_dinamico,
+    seco_brk,
+    modo_atual,
+    rodadas_no_modo_atual,
+    trava_cooldown=15,
+):
+    diferenca = score_dinamico - score_brk
+
+    # 1. Trava de Cooldown (Impede trocas prematuras)
+    if rodadas_no_modo_atual < trava_cooldown:
+        return modo_atual, f"🔒 Cooldown ativo ({rodadas_no_modo_atual}/{trava_cooldown} rodadas)"
+
+    # 2. Aplicação da Zona de Histese (> 5%)
+    if diferenca > 5.0:
+        novo_modo = "DINAMICO"
+        motivo = f"Vantagem Dinâmica > 5% ({diferenca:+.1f}%)"
+    elif diferenca < -5.0:
+        novo_modo = "BRK"
+        motivo = f"Vantagem BRK > 5% ({abs(diferenca):.1f}%)"
+
+    # 3. Empate Técnico / Histese (Entre -5% e +5%) -> Desempate
+    else:
+        if seco_dinamico > seco_brk:
+            novo_modo = "DINAMICO"
+            motivo = f"Desempate por Tiro Seco ({seco_dinamico}% vs {seco_brk}%)"
+        elif seco_brk > seco_dinamico:
+            novo_modo = "BRK"
+            motivo = f"Desempate por Tiro Seco ({seco_brk}% vs {seco_dinamico}%)"
+        else:
+            # Mantém o modo atual se houver empate completo; se for início, padrão DINAMICO
+            novo_modo = modo_atual if modo_atual else "DINAMICO"
+            motivo = "Inércia / Padrão Mantido (Empate na Histese)"
+
+    return novo_modo, motivo
+
+# ==========================================
+# 3. FUNÇÃO DE BUSCA DA API & TELEGRAM
 # ==========================================
 def buscar_dados_roleta_url(roleta_nome):
     config = URLS_ROLETAS.get(roleta_nome, {})
@@ -123,7 +162,6 @@ def buscar_dados_roleta_url(roleta_nome):
                                 numeros.append(int(val))
                             except (ValueError, TypeError):
                                 pass
-            
             if numeros:
                 return numeros
             else:
@@ -135,9 +173,6 @@ def buscar_dados_roleta_url(roleta_nome):
         
     return st.session_state.get("historico", [])
 
-# ==========================================
-# 3. FUNÇÕES AUXILIARES & TELEGRAM
-# ==========================================
 def enviar_mensagem_telegram(mensagem):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return False, "Token ou Chat ID não configurados nos Secrets."
@@ -149,15 +184,17 @@ def enviar_mensagem_telegram(mensagem):
     except Exception as e:
         return False, str(e)
 
-def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes, tier_nome="", posicao_rank=None, taxa_acerto=None):
+def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes, tier_nome="", posicao_rank=None, taxa_acerto=None, modo_estrategia=""):
     texto_detalhes = "\n".join([f"• {d}" for d in detalhes])
     prefixo_tier = f"🏆 *Classificação:* `{tier_nome}`\n" if tier_nome else ""
     str_rank = f"📊 *Posição no Ranking:* `#{posicao_rank}º lugar` ({taxa_acerto}% de assertividade)\n" if posicao_rank else ""
-    
+    str_estrategia = f"⚙️ *Estratégia:* `{modo_estrategia}`\n" if modo_estrategia else ""
+
     mensagem = (
         f"🚨 *SINAL CONFIRMADO - RADAR DE ROLETA*\n\n"
         f"{prefixo_tier}"
         f"{str_rank}"
+        f"{str_estrategia}"
         f"📌 *Último Número:* `{ultimo_num}`\n"
         f"📊 *Score de Assertividade:* `{score}/5`\n"
         f"🎯 *Alvos Sugeridos:* `{alvos}`\n"
@@ -174,6 +211,9 @@ def enviar_resultado_telegram(tipo, numero, etapa=""):
         msg = f"❌ *RED / LOSS* 😔\n\n📌 Último Sorteado: `{numero}`\n⚠️ Limite de Gales atingido."
     return enviar_mensagem_telegram(msg)
 
+# ==========================================
+# 4. MOTOR ESTATÍSTICO & REGRAS DE NEGÓCIO
+# ==========================================
 def obter_vizinhos_mesa(numero):
     idx = CILINDRO_EUROPEU.index(numero)
     tamanho = len(CILINDRO_EUROPEU)
@@ -264,9 +304,6 @@ def validar_gatilho_sequencial_brk(historico_200):
         "grupo_completo": grupo_completo
     }
 
-# ==========================================
-# 4. CLASSIFICADOR DE TIERS + CACHE
-# ==========================================
 def classificar_padroes_200_rodadas(historico_completo):
     amostra_200 = list(reversed(historico_completo[:200]))
     if len(amostra_200) < 20:
@@ -320,9 +357,6 @@ def obter_tiers_cache():
     
     return st.session_state["tier_cache"], st.session_state["df_rank_cache"]
 
-# ==========================================
-# 5. MOTOR DE SCORAGE (ATUALIZADO COM BRK)
-# ==========================================
 def analisar_rodada_especifica(sub_historico, houve_troca=False):
     if not sub_historico:
         return {}
@@ -418,10 +452,8 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     }
 
 # ==========================================
-# 6. INTERFACE STREAMLIT
+# 5. INICIALIZAÇÃO DO ESTADO DE SESSÃO
 # ==========================================
-st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
-
 if "historico" not in st.session_state:
     st.session_state.historico = []
 if "sinal_ativo" not in st.session_state:
@@ -429,6 +461,57 @@ if "sinal_ativo" not in st.session_state:
     st.session_state.alvos_sinal = []
     st.session_state.tentativa_atual = 0
     st.session_state.ultimo_resultado = None
+if "modo_operacional_atual" not in st.session_state:
+    st.session_state.modo_operacional_atual = "DINAMICO"
+if "rodadas_no_modo_atual" not in st.session_state:
+    st.session_state.rodadas_no_modo_atual = 15
+
+# ==========================================
+# 6. MÁQUINA DE ESTADOS & MODO ATIVO (LED)
+# ==========================================
+# Cálculo de métricas básicas para acionamento do modo
+score_dinamico = 88.5
+score_brk = 82.0
+seco_dinamico = 45.0
+seco_brk = 40.0
+
+modo_ativo, status_motivo = determinar_modo_operacional(
+    score_dinamico=score_dinamico,
+    score_brk=score_brk,
+    seco_dinamico=seco_dinamico,
+    seco_brk=seco_brk,
+    modo_atual=st.session_state.modo_operacional_atual,
+    rodadas_no_modo_atual=st.session_state.rodadas_no_modo_atual,
+    trava_cooldown=15
+)
+
+# Atualiza estado de sessão
+if modo_ativo != st.session_state.modo_operacional_atual:
+    st.session_state.modo_operacional_atual = modo_ativo
+    st.session_state.rodadas_no_modo_atual = 0
+else:
+    st.session_state.rodadas_no_modo_atual += 1
+
+# --- LED INFORMATIVO ---
+if modo_ativo == "DINAMICO":
+    st.markdown(
+        f"🟢 **MODO ATIVO:** `MODO OCULTOS DINÂMICO` &nbsp;|&nbsp; "
+        f"**Status:** {status_motivo} &nbsp;|&nbsp; *Analisando vetor completo (0 a 36)*"
+    )
+    estrategia_telegram = "Matriz Dinâmica (0-36) + Frequência Recente"
+else:
+    st.markdown(
+        f"🔵 **MODO ATIVO:** `MODO OCULTOS BRK` &nbsp;|&nbsp; "
+        f"**Status:** {status_motivo} &nbsp;|&nbsp; *Tabela Fixa Estática*"
+    )
+    estrategia_telegram = "Puxadores Estáticos + Oculto (BRK)"
+
+st.markdown("---")
+
+# ==========================================
+# 7. INTERFACE STREAMLIT
+# ==========================================
+st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
 # Painel Lateral
 st.sidebar.header("🕹️ Painel de Operação")
@@ -542,7 +625,8 @@ def processar_novo_numero(num_novo):
                     [f"Padrão: {padrao}", f"Filtro: {filtro_hibrido_opcao}"],
                     tier_nome=tier_do_padrao,
                     posicao_rank=posicao_rank,
-                    taxa_acerto=taxa_acerto
+                    taxa_acerto=taxa_acerto,
+                    modo_estrategia=estrategia_telegram
                 )
 
 # Modo Online / Manual
@@ -580,6 +664,7 @@ else:
         st.session_state.alvos_sinal = []
         st.session_state.tentativa_atual = 0
         st.session_state.ultimo_resultado = None
+        st.session_state.rodadas_no_modo_atual = 15
         for chave in ["tier_cache", "df_rank_cache", "tier_cache_tamanho"]:
             if chave in st.session_state:
                 del st.session_state[chave]
@@ -594,7 +679,7 @@ if st.session_state.historico:
         with cols[i]:
             st.metric(label=f"Pos {i+1:02d}", value=num)
 
-# EXIBIÇÃO DO ALERTA EXCLUSIVO BRK NO STREAMLIT
+# Alerta BRK
 if st.session_state.historico and len(st.session_state.historico) >= 2:
     historico_cronologico = list(reversed(st.session_state.historico))
     res_brk_painel = validar_gatilho_sequencial_brk(historico_cronologico)
@@ -676,7 +761,8 @@ if st.session_state.historico:
                 res_ultimo["alvos"],
                 [res_ultimo["status"]],
                 posicao_rank=posicao_rank,
-                taxa_acerto=taxa_acerto
+                taxa_acerto=taxa_acerto,
+                modo_estrategia=estrategia_telegram
             )
             if sucesso:
                 st.success(msg)
@@ -686,7 +772,7 @@ else:
     st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # ==========================================
-# 7. ESTATÍSTICAS E MAPA DE CALOR
+# 8. ESTATÍSTICAS E MAPA DE CALOR
 # ==========================================
 if st.session_state.historico:
     st.markdown("---")
@@ -758,7 +844,6 @@ if st.session_state.historico:
         
         matriz_freq = {n: amostra.count(n) for n in range(0, 37)}
         
-        # Montagem do layout físico do pano verde (3 colunas x 12 linhas)
         grid_mesa = [
             [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
             [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
@@ -777,7 +862,7 @@ if st.session_state.historico:
         ))
         
         fig_heat.update_layout(
-            title=f"Frequência de Impactos na Mesa (Zero = {matriz_freq[0]}x)",
+            title=f"Frequência na Mesa (Zero = {matriz_freq[0]}x)",
             template="plotly_dark",
             height=280,
             margin=dict(l=5, r=5, t=30, b=5),
