@@ -52,7 +52,7 @@ TABELA_OCULTOS_BRK = {
     10: [0, 5, 20, 30, 19, 28]
 }
 
-TABELA_PUXADORES_FIXA = {
+TABELA_PUXADORES_FIXA_BRK = {
     0:  [33, 11, 21, 34], 1:  [20, 22, 32, 12], 2:  [36, 5, 7, 33],
     3:  [0, 7, 20, 10],   4:  [5, 10, 7, 3],    5:  [3, 6, 9, 27],
     6:  [7, 4, 17, 27],   7:  [8, 4, 18, 28],   8:  [3, 6, 19, 29],
@@ -84,7 +84,32 @@ URLS_ROLETAS = {
 }
 
 # ==========================================
-# 2. LÓGICA DE GERENCIAMENTO DE MODOS
+# 2. BUSCA DINÂMICA (MATRIZ DE TRANSIÇÃO 0-36)
+# ==========================================
+def buscar_puxadores_dinamicos(numero_alvo, historico):
+    """
+    Espaço direcionado para o MODO DINÂMICO:
+    Analisa todo o histórico (0 a 36) para ver quais dezenas
+    mais frequentemente sucederam o número alvo.
+    """
+    if len(historico) < 2:
+        return []
+    
+    subsequentes = []
+    # Percorre o histórico buscando ocorrências do número alvo e captura o número seguinte
+    for i in range(len(historico) - 1):
+        if historico[i] == numero_alvo:
+            subsequentes.append(historico[i + 1])
+            
+    if not subsequentes:
+        return []
+    
+    # Retorna as 4 dezenas de maior frequência após o número alvo
+    contagem = pd.Series(subsequentes).value_counts()
+    return contagem.head(4).index.tolist()
+
+# ==========================================
+# 3. LÓGICA DE GERENCIAMENTO DE MODOS
 # ==========================================
 def determinar_modo_operacional(
     score_dinamico,
@@ -120,7 +145,7 @@ def determinar_modo_operacional(
     return novo_modo, motivo
 
 # ==========================================
-# 3. FUNÇÃO DE BUSCA DA API & TELEGRAM
+# 4. FUNÇÃO DE BUSCA DA API & TELEGRAM
 # ==========================================
 def buscar_dados_roleta_url(roleta_nome):
     config = URLS_ROLETAS.get(roleta_nome, {})
@@ -207,7 +232,7 @@ def enviar_resultado_telegram(tipo, numero, etapa=""):
     return enviar_mensagem_telegram(msg)
 
 # ==========================================
-# 4. MOTOR ESTATÍSTICO & REGRAS DE NEGÓCIO
+# 5. MOTOR ESTATÍSTICO & REGRAS DE NEGÓCIO
 # ==========================================
 def obter_vizinhos_mesa(numero):
     idx = CILINDRO_EUROPEU.index(numero)
@@ -231,44 +256,10 @@ def obter_camuflados(numero):
         soma = sum(int(digit) for digit in str(soma))
     return CAMUFLADOS_BASE.get(soma, [])
 
-def calcular_matriz_transicao(historico):
-    if len(historico) < 2:
-        return []
-    ultimo = historico[-1]
-    subsequentes = [historico[i+1] for i in range(len(historico) - 1) if historico[i] == ultimo]
-    if not subsequentes:
-        return []
-    return pd.Series(subsequentes).value_counts().head(4).index.tolist()
-
-def obter_puxadores_otimizados(numero_sorteado, historico_recentes):
-    if len(historico_recentes) < 100:
-        return TABELA_PUXADORES_FIXA.get(numero_sorteado, [])
-    puxadores_dinamicos = calcular_matriz_transicao(historico_recentes)
-    puxadores_fixos = TABELA_PUXADORES_FIXA.get(numero_sorteado, [])
-    intersecao = [num for num in puxadores_dinamicos if num in puxadores_fixos]
-    return intersecao if intersecao else (puxadores_dinamicos[:4] if puxadores_dinamicos else puxadores_fixos)
-
 def checar_estrategia_fantasma(historico):
     if len(historico) >= 3 and all(n in GRUPO_FANTASMA for n in historico[-3:]):
         return {"status": "ATIVADO", "principais": [9, 19, 27]}
     return {"status": "INATIVO"}
-
-def obter_grupo_brk_simples(numero):
-    if numero == 0:
-        grp = 10
-    else:
-        d1 = numero // 10
-        d2 = numero % 10
-        grp = d1 + d2
-        if grp > 10:
-            grp = (grp // 10) + (grp % 10)
-    return grp, TABELA_OCULTOS_BRK.get(grp, [])
-
-def obter_ocultos_dinamico(numero, historico_recentes):
-    puxadores = obter_puxadores_otimizados(numero, historico_recentes)
-    camuflados = obter_camuflados(numero)
-    uniao = list(dict.fromkeys(puxadores + camuflados))
-    return uniao
 
 def validar_gatilho_sequencial_brk(historico_200):
     if not historico_200 or len(historico_200) < 2:
@@ -378,17 +369,27 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     alvos = set()
     filtros_ativos = []
 
+    # Obtenção explícita dos puxadores para as colunas
+    puxadores_brk = TABELA_PUXADORES_FIXA_BRK.get(ultimo, [])
+    puxadores_dinamico = buscar_puxadores_dinamicos(ultimo, sub_historico)
+
+    # Seleção dos puxadores de acordo com o modo ativo no sistema
+    modo_atual = st.session_state.get("modo_operacional_atual", "DINAMICO")
+    if modo_atual == "DINAMICO" and puxadores_dinamico:
+        puxadores_ativos = puxadores_dinamico
+    else:
+        puxadores_ativos = puxadores_brk
+
     res_brk = validar_gatilho_sequencial_brk(sub_historico)
     if res_brk["sinal_ativo"]:
         score += 1
         filtros_ativos.append(f"OcultosBRK(G{res_brk['grupo_confirmado']})")
         alvos.update(res_brk["grupo_completo"])
 
-    puxadores = obter_puxadores_otimizados(ultimo, sub_historico)
-    if puxadores:
+    if puxadores_ativos:
         score += 1
         filtros_ativos.append("Puxadores")
-        alvos.update(puxadores[:2])
+        alvos.update(puxadores_ativos[:2])
 
     vizinhos = obter_vizinhos_mesa(ultimo)
     score += 1
@@ -444,18 +445,14 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
 
     padrao_nome = " + ".join(filtros_ativos) if filtros_ativos else "Geral"
 
-    grp_brk, dezenas_brk = obter_grupo_brk_simples(ultimo)
-    dezenas_dinamico = obter_ocultos_dinamico(ultimo, sub_historico)
-
     return {
         "ultimo": ultimo,
         "esquerda": f"{vizinhos['esq_2']} | {vizinhos['esq_1']}",
         "direita": f"{vizinhos['dir_1']} | {vizinhos['dir_2']}",
-        "puxadores": str(puxadores[:2]),
+        "puxadores_brk": str(puxadores_brk[:2]) if puxadores_brk else "-",
+        "puxadores_dinamico": str(puxadores_dinamico[:2]) if puxadores_dinamico else "-",
         "vizinhos_str": f"Esq({vizinhos['esq_1']}), Dir({vizinhos['dir_1']})",
         "camuflados": str(obter_camuflados(ultimo)),
-        "ocultos_brk": f"G{grp_brk}: {dezenas_brk}",
-        "ocultos_dinamico": str(dezenas_dinamico),
         "racetrack": setor_dom,
         "inversao": str_inversao,
         "reincidencia": str(reincidencia) if reincidencia else "-",
@@ -469,7 +466,7 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     }
 
 # ==========================================
-# 5. INICIALIZAÇÃO DO ESTADO DE SESSÃO
+# 6. INICIALIZAÇÃO DO ESTADO DE SESSÃO
 # ==========================================
 if "historico" not in st.session_state:
     st.session_state.historico = []
@@ -484,7 +481,7 @@ if "rodadas_no_modo_atual" not in st.session_state:
     st.session_state.rodadas_no_modo_atual = 15
 
 # ==========================================
-# 6. MÁQUINA DE ESTADOS & MODO ATIVO (LED)
+# 7. MÁQUINA DE ESTADOS & MODO ATIVO (LED)
 # ==========================================
 score_dinamico = 88.5
 score_brk = 82.0
@@ -524,7 +521,7 @@ else:
 st.markdown("---")
 
 # ==========================================
-# 7. INTERFACE STREAMLIT
+# 8. INTERFACE STREAMLIT
 # ==========================================
 st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
@@ -643,6 +640,7 @@ def processar_novo_numero(num_novo):
                     modo_estrategia=estrategia_telegram
                 )
 
+# Modo Online / Manual
 if modo_operacao == "On-line (Captura Automática)":
     st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
@@ -732,11 +730,10 @@ if st.session_state.historico:
             "Último": res["ultimo"],
             "Esquerda": res["esquerda"],
             "Direita": res["direita"],
-            "Puxadores Híbridos": res["puxadores"],
+            "Puxadores BRK": res["puxadores_brk"],
+            "Puxadores Dinâmico": res["puxadores_dinamico"],
             "Vizinhos Físicos": res["vizinhos_str"],
             "Camuflados": res["camuflados"],
-            "Ocultos BRK": res["ocultos_brk"],
-            "Ocultos Dinâmico": res["ocultos_dinamico"],
             "Racetrack": res["racetrack"],
             "Inversão": res["inversao"],
             "Reincidência": res["reincidencia"],
@@ -748,7 +745,6 @@ if st.session_state.historico:
     df_exibicao = pd.DataFrame(dados_tabela)
     st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
 
-    # Ranking dos Tiers
     tiers_atuais, df_rank = obter_tiers_cache()
     with st.expander("🏆 Ranking dos Padrões (Últimas 200 Rodadas)", expanded=False):
         if not df_rank.empty:
@@ -756,7 +752,6 @@ if st.session_state.historico:
         else:
             st.info("Aguardando histórico suficiente (mínimo ~20 sinais) para consolidação do ranking.")
 
-    # Alerta Manual
     historico_analise = list(reversed(st.session_state.historico))
     res_ultimo = analisar_rodada_especifica(historico_analise)
     if res_ultimo["score_num"] >= 4:
@@ -787,7 +782,7 @@ else:
     st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # ==========================================
-# 8. ESTATÍSTICAS E MAPA DE CALOR
+# 9. ESTATÍSTICAS E MAPA DE CALOR
 # ==========================================
 if st.session_state.historico:
     st.markdown("---")
