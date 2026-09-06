@@ -565,8 +565,8 @@ def processar_novo_numero(num_novo):
                 permitido = True
             elif filtro_hibrido_opcao == "👑 Elite (Top 3 - Máxima Precisão)" and tier_do_padrao == "👑 Elite (Top 3)":
                 permitido = True
-            if st.session_state.sinal_ativo:
-            if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
+        if st.session_state.sinal_ativo:
+        if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
             alvos_atuais = set(st.session_state.alvos_sinal)
             novos_alvos_unicos = set(res_ultimo.get("alvos", [])) - alvos_atuais
             
@@ -590,6 +590,17 @@ def processar_novo_numero(num_novo):
         alvos_originais = list(dict.fromkeys(res_ultimo["alvos"]))
         st.session_state.alvos_sinal = alvos_originais[:8]
         st.session_state.tentativa_atual = 0
+        
+        enviar_alerta_telegram(
+            res_ultimo["ultimo"],
+            res_ultimo["score_num"],
+            res_ultimo["alvos"],
+            [f"Padrão: {padrao}", f"Filtro: {filtro_hibrido_opcao}"],
+            tier_nome=tier_do_padrao,
+            posicao_rank=posicao_rank,
+            taxa_acerto=taxa_acerto,
+            modo_estrategia=estrategia_telegram
+        )
         
         enviar_alerta_telegram(
             res_ultimo["ultimo"],
