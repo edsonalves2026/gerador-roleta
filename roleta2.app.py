@@ -880,12 +880,12 @@ if st.session_state.historico:
 st.markdown("---")
 st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro (Racetrack)")
 
-ultimas_200 = st.session_state.historico[:200]
-qtd = len(ultimas_200)
+ultimas_80 = st.session_state.historico[:80]
+qtd = len(ultimas_80)
 
 if qtd >= 20:
     try:
-        cont = pd.Series(ultimas_200).value_counts().reindex(range(37), fill_value=0)
+        cont = pd.Series(ultimas_80).value_counts().reindex(range(37), fill_value=0)
         max_freq = int(max(cont.values)) if max(cont.values) > 0 else 1
 
         VERMELHOS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
@@ -933,7 +933,7 @@ if qtd >= 20:
 
         # Renderização isolada sem passar pelo parser de Markdown do Streamlit
         components.html(raw_html, height=210)
-        st.caption("Dica: As casas destacam dinamicamente conforme a frequência das últimas 200 rodadas.")
+        st.caption("Dica: As casas destacam dinamicamente conforme a frequência das últimas 80 rodadas.")
     except Exception as e:
         st.error(f"Erro ao renderizar o Racetrack: {e}")
 else:
@@ -944,7 +944,7 @@ if st.session_state.get("historico", []):
 
  # Ranking dos Tiers
     tiers_atuais, df_rank = obter_tiers_cache()
-    with st.expander("🏆 Ranking dos Padrões (Últimas 200 Rodadas)", expanded=False):
+    with st.expander("🏆 Ranking dos Padrões (Últimas 80 Rodadas)", expanded=False):
         if not df_rank.empty:
             st.dataframe(df_rank, use_container_width=True, hide_index=True)
         else:
