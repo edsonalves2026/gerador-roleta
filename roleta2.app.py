@@ -706,34 +706,38 @@ if st.session_state.get('sinal_ativo', False):
 else:
     st.success("✅ Nenhum sinal ativo — Aguardando padrão convergente...")
 
-    # Alerta Manual
-    historico_analise = list(reversed(st.session_state.historico))
-    res_ultimo = analisar_rodada_especifica(historico_analise)
-    if res_ultimo["score_num"] >= 4:
-        st.error(f"🚨 SINAL IDENTIFICADO: {res_ultimo['alvos']}")
-            
-        if st.button("📤 Reenviar Alerta para Telegram"):
-            posicao_rank = None
-            taxa_acerto = None
+# Alerta Manual
+historico_analise = list(reversed(st.session_state.historico))
+res_ultimo = analisar_rodada_especifica(historico_analise)
+
+if res_ultimo["score_num"] >= 4:
+    st.error(f"🚨 SINAL IDENTIFICADO: {res_ultimo['alvos']}")
+    
+    if st.button("📤 Reenviar Alerta para Telegram"):
+        posicao_rank = None
+        taxa_acerto = None
+        
+        # Garante a busca no rank caso df_rank exista no escopo
+        if "df_rank" in locals() or "df_rank" in globals():
             if not df_rank.empty and res_ultimo["padrao_nome"] in df_rank["Padrão"].values:
                 idx = df_rank[df_rank["Padrão"] == res_ultimo["padrao_nome"]].index[0]
                 posicao_rank = idx + 1
                 taxa_acerto = df_rank.loc[idx, "Taxa de Acerto (%)"]
-            
-            sucesso, msg = enviar_alerta_telegram(
-                res_ultimo["ultimo"],
-                res_ultimo["score_num"],
-                res_ultimo["alvos"],
-                [res_ultimo["status"]],
-                posicao_rank=posicao_rank,
-                taxa_acerto=taxa_acerto
-            )
-            if sucesso:
-                st.success(msg)
-            else:
-                st.error(msg)
-            else:
-        st.info("Aguardando dados da API ou inserção manual no painel lateral...")
+        
+        sucesso, msg = enviar_alerta_telegram(
+            res_ultimo["ultimo"],
+            res_ultimo["score_num"],
+            res_ultimo["alvos"],
+            [res_ultimo["status"]],
+            posicao_rank=posicao_rank,
+            taxa_acerto=taxa_acerto
+        )
+        if sucesso:
+            st.success(msg)
+        else:
+            st.error(msg)
+else:
+    st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # Tabela Analítica
 if st.session_state.historico:
