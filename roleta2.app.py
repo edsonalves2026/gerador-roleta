@@ -233,7 +233,7 @@ def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes, tier_nome="", pos
         f"🎯 *Alvos Sugeridos:* `{alvos}`\n"
         f"🛡️ *Proteção:* `0 (Zero)`\n\n"
         f"🔍 *Filtros Convergentes:*\n{texto_detalhes}\n\n"
-        f"⚠️ *Entrada recomendada: Manter aposta por até 3 a 4 rodadas.*"
+        f"⚠️ *Entrada recomendada: Manter aposta por até 2 rodadas.*"
     )
     return enviar_mensagem_telegram(mensagem)
 
