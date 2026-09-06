@@ -775,43 +775,54 @@ else:
     st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # ==========================================
-# 9. ESTATÍSTICAS E MAPA DE CALOR
+# 9. ESTATÍSTICAS E MAPA DE CORES (200 RODADAS)
 # ==========================================
 if st.session_state.historico:
     st.markdown("---")
-    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 100)")
+    st.subheader("📈 Estatísticas — Últimas 200 Rodadas")
     
-    total_disponivel = len(st.session_state.historico)
-    max_amostra = min(200, total_disponivel)
-    qtd_rodadas = st.slider(
-        "Selecione o tamanho da amostra (Últimas X rodadas):",
-        min_value=min(10, total_disponivel),
-        max_value=max_amostra,
-        value=max_amostra,
-        step=5
-    )
-    
-    amostra = list(reversed(st.session_state.historico[:qtd_rodadas]))
+    # Amostra fixa das últimas 200 rodadas (ou total disponível)
+    amostra = list(reversed(st.session_state.historico[:200]))
     total_amostra = len(amostra)
     
-    col_g1, col_g2, col_g3 = st.columns(3)
+    col_e1, col_e2, col_e3 = st.columns(3)
     
-    with col_g1:
-        st.markdown("### 📊 QUENTES/FRIOS")
-        contagem = pd.Series(amostra).value_counts()
-        quentes = contagem.head(5).index.tolist()
-        frios = contagem.tail(5).index.tolist()
+    # ------------------------------------------
+    # COLUNA 1: QUENTES / FRIAS
+    # ------------------------------------------
+    with col_e1:
+        st.markdown("### 🔥 Quentes / Frias")
+        contagem = pd.Series(amostra).value_counts().reindex(range(0, 37), fill_value=0)
+        mediana = contagem.median()
         
-        st.write(f"🔥 **Mais Frequentes:** {quentes}")
-        st.write(f"🧊 **Menos Frequentes:** {frios}")
+        df_qf = pd.DataFrame({
+            'Número': contagem.index,
+            'Frequência': contagem.values,
+            'Tipo': ['Mais Sorteados' if v >= mediana else 'Menos Sorteados' for v in contagem.values]
+        })
         
-        freq_df = pd.DataFrame({'Número': contagem.index.astype(str), 'Frequência': contagem.values})
-        fig_freq = px.bar(freq_df.head(10), x='Número', y='Frequência', title="Top 10 Números na Amostra", color='Frequência')
-        fig_freq.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig_freq, use_container_width=True)
-        
-    with col_g2:
-        st.markdown("### 📊 AVANÇADA")
+        fig_qf = px.bar(
+            df_qf, 
+            x='Número', 
+            y='Frequência', 
+            color='Tipo',
+            color_discrete_map={'Mais Sorteados': '#EF4444', 'Menos Sorteados': '#3B82F6'}
+        )
+        fig_qf.update_layout(
+            template="plotly_dark",
+            height=320,
+            margin=dict(l=10, r=10, t=20, b=20),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            xaxis=dict(title=None, tickmode='linear', tick0=0, dtick=10),
+            yaxis=dict(title=None)
+        )
+        st.plotly_chart(fig_qf, use_container_width=True)
+
+    # ------------------------------------------
+    # COLUNA 2: DÚZIAS / COLUNAS / PARIDADE
+    # ------------------------------------------
+    with col_e2:
+        st.markdown("### 📐 Dúzias / Colunas / Paridade")
         
         d1 = sum(1 for n in amostra if 1 <= n <= 12)
         d2 = sum(1 for n in amostra if 13 <= n <= 24)
@@ -823,57 +834,95 @@ if st.session_state.historico:
         
         par = sum(1 for n in amostra if n > 0 and n % 2 == 0)
         impar = sum(1 for n in amostra if n % 2 != 0)
-        
         baixas = sum(1 for n in amostra if 1 <= n <= 18)
         altas = sum(1 for n in amostra if 19 <= n <= 36)
         
-        df_duzias = pd.DataFrame({
-            'Grupo': ['1ª Dúzia', '2ª Dúzia', '3ª Dúzia', '1ª Coluna', '2ª Coluna', '3ª Coluna'],
-            'Porcentagem': [
-                round((d1/total_amostra)*100, 1), round((d2/total_amostra)*100, 1), round((d3/total_amostra)*100, 1),
-                round((c1/total_amostra)*100, 1), round((c2/total_amostra)*100, 1), round((c3/total_amostra)*100, 1)
-            ]
+        df_dcp = pd.DataFrame({
+            'Categoria': ['D1 1-12', 'D2 13-24', 'D3 25-36', 'C1', 'C2', 'C3', 'Pares', 'Ímpares', 'Baixas 1-18', 'Altas 19-36'],
+            'Quantidade': [d1, d2, d3, c1, c2, c3, par, impar, baixas, altas]
         })
         
-        fig_adv = px.bar(df_duzias, x='Grupo', y='Porcentagem', text='Porcentagem', title="Distribuição Dúzias e Colunas (%)")
-        fig_adv.update_traces(texttemplate='%{text}%', textposition='outside')
-        fig_adv.update_layout(template="plotly_dark", height=280, margin=dict(l=10, r=10, t=30, b=5))
-        st.plotly_chart(fig_adv, use_container_width=True)
-        
-        st.caption(f"**Par:** {round((par/total_amostra)*100)}% | **Ímpar:** {round((impar/total_amostra)*100)}% | **1-18:** {round((baixas/total_amostra)*100)}% | **19-36:** {round((altas/total_amostra)*100)}%")
+        fig_dcp = px.bar(
+            df_dcp, 
+            x='Categoria', 
+            y='Quantidade', 
+            color='Categoria',
+            color_discrete_sequence=['#F87171', '#38BDF8', '#A7F3D0', '#FDE047', '#DDD6FE', '#C084FC', '#22C55E', '#EF4444', '#3B82F6', '#F97316']
+        )
+        fig_dcp.update_layout(
+            template="plotly_dark",
+            height=320,
+            showlegend=False,
+            margin=dict(l=10, r=10, t=20, b=20),
+            xaxis=dict(title=None, tickangle=-30),
+            yaxis=dict(title=None)
+        )
+        st.plotly_chart(fig_dcp, use_container_width=True)
 
-    with col_g3:
-        st.markdown(f"### 📊 MAPA DE CALOR (MESA)")
+    # ------------------------------------------
+    # COLUNA 3: MAPA DE CORES — ÚLTIMAS 100
+    # ------------------------------------------
+    with col_e3:
+        st.markdown("### 🎨 Mapa de Cores — Últimas 100")
         
-        matriz_freq = {n: amostra.count(n) for n in range(0, 37)}
+        amostra_100 = st.session_state.historico[:100]
         
-        grid_mesa = [
-            [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
-            [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
-            [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
-        ]
+        VERMELHOS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
         
-        z_values = [[matriz_freq[num] for num in lin] for lin in grid_mesa]
-        text_values = [[f"{num}<br>({matriz_freq[num]}x)" for num in lin] for lin in grid_mesa]
+        def obter_cor_hex(num):
+            if num == 0:
+                return '#15803D' # Verde
+            return '#B91C1C' if num in VERMELHOS else '#1F2937' # Vermelho / Preto
         
-        fig_heat = go.Figure(data=go.Heatmap(
-            z=z_values,
-            text=text_values,
+        # Monta matriz 10x10 para exibição visual das últimas 100 rodadas
+        grid_numeros = []
+        grid_cores = []
+        
+        for i in range(0, 100, 10):
+            linha_nums = amostra_100[i:i+10]
+            if len(linha_nums) < 10:
+                linha_nums += [None] * (10 - len(linha_nums))
+            grid_numeros.append(linha_nums)
+            grid_cores.append([obter_cor_hex(n) if n is not None else '#000000' for n in linha_nums])
+        
+        z_dummy = [[1]*10 for _ in range(len(grid_numeros))]
+        text_grid = [[str(n) if n is not None else "" for n in lin] for lin in grid_numeros]
+        
+        # Mapeamento de cores customizado por célula
+        colorscale = []
+        flat_cores = [cor for sublist in grid_cores for cor in sublist]
+        
+        fig_mapa = go.Figure(data=go.Heatmap(
+            z=z_dummy,
+            text=text_grid,
             texttemplate="%{text}",
-            colorscale='Viridis',
-            showscale=False
+            textfont=dict(size=11, color="white"),
+            showscale=False,
+            hoverinfo='none'
         ))
         
-        fig_heat.update_layout(
-            title=f"Frequência na Mesa (Zero = {matriz_freq[0]}x)",
+        # Aplicação das cores reais nos blocos
+        shapes = []
+        for r_idx, row in enumerate(grid_cores):
+            for c_idx, color in enumerate(row):
+                shapes.append(dict(
+                    type="rect",
+                    xref="x", yref="y",
+                    x0=c_idx - 0.5, y0=r_idx - 0.5,
+                    x1=c_idx + 0.5, y1=r_idx + 0.5,
+                    fillcolor=color,
+                    line=dict(width=1, color="#111827")
+                ))
+                
+        fig_mapa.update_layout(
             template="plotly_dark",
-            height=280,
-            margin=dict(l=5, r=5, t=30, b=5),
-            xaxis=dict(showticklabels=False),
-            yaxis=dict(showticklabels=False)
+            height=320,
+            margin=dict(l=5, r=5, t=10, b=5),
+            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, autorange="reversed"),
+            shapes=shapes
         )
-        
-        st.plotly_chart(fig_heat, use_container_width=True)
+        st.plotly_chart(fig_mapa, use_container_width=True)
 
 # ==========================================
 # 🏆 RANKING DOS PADRÕES
