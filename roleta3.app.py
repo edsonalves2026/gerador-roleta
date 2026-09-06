@@ -748,7 +748,7 @@ if st.session_state.historico:
         else:
             st.info(f"Dados insuficientes ({qtd}/12)")
 
-        with c3:
+           with c3:
         st.markdown("### 🧭 Setores da Roleta — Últimas 200 rodadas")
         if qtd >= 10:
             amostra_setores = st.session_state.historico[:200]
@@ -764,7 +764,6 @@ if st.session_state.historico:
                 "ZERO_SPIEL": "Zero Spiel"
             }
             
-            # Exibição em tabela com contagem e porcentagem
             dados_setores = []
             for chave, valor in contagem_setores.items():
                 nome_legivel = nomes_exibicao.get(chave, chave)
@@ -774,7 +773,6 @@ if st.session_state.historico:
             df_setores = pd.DataFrame(dados_setores)
             st.dataframe(df_setores, use_container_width=True, hide_index=True)
             
-            # Visualização gráfica dos setores no cilindro
             st.markdown("##### 🎯 Divisão dos Setores")
             st.markdown("""
             <div style='background-color:#1a1a1a; padding:10px; border-radius:8px; text-align:center;'>
@@ -784,7 +782,6 @@ if st.session_state.historico:
                 <span style='background-color:#44aa66; padding:6px 12px; border-radius:4px; margin:3px;'>ZERO SPIEL</span>
             </div>
             """, unsafe_allow_html=True)
-            
         else:
             st.info(f"Dados insuficientes ({qtd}/10)")
     
