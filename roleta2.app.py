@@ -612,156 +612,28 @@ if st.session_state.historico:
 # MAPA DE CALOR (LAYOUT RACETRACK / PISTA)
 # ==========================================
 st.markdown("---")
-st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro (Racetrack)")
+st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro")
 
 ultimas_200 = st.session_state.historico[:200]
 qtd = len(ultimas_200)
 
 if qtd >= 20:
-    try:
-        cont = pd.Series(ultimas_200).value_counts().reindex(range(37), fill_value=0)
-        max_freq = int(max(cont.values)) if max(cont.values) > 0 else 1
-
-        def get_cor_calor(num):
-            freq = int(cont.get(num, 0))
-            intensidade = freq / max_freq
-            if intensidade > 0.75:
-                return f"rgba(220, 40, 40, {0.65 + intensidade*0.35:.2f})"
-            elif intensidade > 0.50:
-                return f"rgba(230, 120, 20, {0.55 + intensidade*0.35:.2f})"
-            elif intensidade > 0.25:
-                return f"rgba(210, 160, 30, {0.45 + intensidade*0.35:.2f})"
-            else:
-                return f"rgba(80, 60, 20, {0.35 + intensidade*0.30:.2f})"
-
-        topo_nums = [5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35]
-        base_nums = [30, 11, 36, 13, 27, 6, 34, 17, 25, 2, 21, 4, 19, 15, 32]
-        esq_nums = [10, 23, 8]
-        dir_nums = [3, 26, 0]
-
-        html_topo = "".join([f'<div class="cell" style="background:{get_cor_calor(n)};">{n}<span class="cell-sub">({int(cont.get(n,0))})</span></div>' for n in topo_nums])
-        html_base = "".join([f'<div class="cell" style="background:{get_cor_calor(n)};">{n}<span class="cell-sub">({int(cont.get(n,0))})</span></div>' for n in base_nums])
-
-        c_esq_0, c_esq_1, c_esq_2 = esq_nums[0], esq_nums[1], esq_nums[2]
-        c_dir_0, c_dir_1, c_dir_2 = dir_nums[0], dir_nums[1], dir_nums[2]
-
-        html_racetrack = f"""
-        <style>
-            .racetrack-container {{
-                width: 100%;
-                max-width: 1100px;
-                margin: 0 auto;
-                background: #0d0e12;
-                padding: 15px;
-                border-radius: 40px;
-                border: 2px solid #333;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-                font-family: Arial, sans-serif;
-            }}
-            .racetrack-grid {{
-                display: grid;
-                grid-template-columns: 80px repeat(16, 1fr) 80px;
-                grid-template-rows: auto auto auto;
-                gap: 2px;
-                text-align: center;
-            }}
-            .cell {{
-                padding: 6px 2px;
-                border: 1px solid #222;
-                border-radius: 4px;
-                color: #fff;
-                font-weight: bold;
-                font-size: 13px;
-                min-height: 42px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-            }}
-            .cell-sub {{
-                font-size: 9px;
-                opacity: 0.8;
-                font-weight: normal;
-            }}
-            .center-area {{
-                grid-column: 2 / 18;
-                grid-row: 2;
-                display: flex;
-                align-items: center;
-                justify-content: space-around;
-                background: rgba(25, 28, 36, 0.9);
-                border: 1px solid #444;
-                border-radius: 8px;
-                color: #aaa;
-                font-weight: bold;
-                font-size: 12px;
-                letter-spacing: 1px;
-                padding: 10px 0;
-                margin: 2px 0;
-            }}
-            .sector-title {{
-                flex: 1;
-                text-align: center;
-                border-right: 1px solid #333;
-            }}
-            .sector-title:last-child {{
-                border-right: none;
-            }}
-            .curva-col {{
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-                gap: 2px;
-            }}
-        </style>
-
-        <div class="racetrack-container">
-            <div class="racetrack-grid">
-                <div class="curva-col" style="grid-column: 1; grid-row: 1 / span 3;">
-                    <div class="cell" style="background:{get_cor_calor(c_esq_0)}; border-top-left-radius: 20px;">
-                        {c_esq_0}<span class="cell-sub">({int(cont.get(c_esq_0,0))})</span>
-                    </div>
-                    <div class="cell" style="background:{get_cor_calor(c_esq_1)};">
-                        {c_esq_1}<span class="cell-sub">({int(cont.get(c_esq_1,0))})</span>
-                    </div>
-                    <div class="cell" style="background:{get_cor_calor(c_esq_2)}; border-bottom-left-radius: 20px;">
-                        {c_esq_2}<span class="cell-sub">({int(cont.get(c_esq_2,0))})</span>
-                    </div>
-                </div>
-
-                {html_topo}
-
-                <div class="center-area">
-                    <div class="sector-title">TIER</div>
-                    <div class="sector-title">ORPHELINS</div>
-                    <div class="sector-title">VOISINS</div>
-                    <div class="sector-title">ZERO</div>
-                </div>
-
-                {html_base}
-
-                <div class="curva-col" style="grid-column: 18; grid-row: 1 / span 3;">
-                    <div class="cell" style="background:{get_cor_calor(c_dir_0)}; border-top-right-radius: 20px;">
-                        {c_dir_0}<span class="cell-sub">({int(cont.get(c_dir_0,0))})</span>
-                    </div>
-                    <div class="cell" style="background:{get_cor_calor(c_dir_1)};">
-                        {c_dir_1}<span class="cell-sub">({int(cont.get(c_dir_1,0))})</span>
-                    </div>
-                    <div class="cell" style="background:{get_cor_calor(c_dir_2)}; border-bottom-right-radius: 20px;">
-                        {c_dir_2}<span class="cell-sub">({int(cont.get(c_dir_2,0))})</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        """
-
-        # CORREÇÃO AQUI: unsafe_allow_html=True
-        st.markdown(html_racetrack, unsafe_allow_html=True)
-        st.caption("🌡️ Distribuição Racetrack | As cores esquentam dinamicamente conforme a frequência das últimas 200 rodadas.")
-    except Exception as e:
-        st.error(f"Erro ao renderizar o Racetrack: {e}")
+    cont = pd.Series(ultimas_200).value_counts().reindex(range(37), fill_value=0)
+    
+    # Ordem física da roleta europeia
+    ordem_roleta = [
+        0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 
+        10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
+    ]
+    
+    # Exibição limpa em grid contínuo
+    cols = st.columns(12)
+    for idx, num in enumerate(ordem_roleta):
+        freq = int(cont.get(num, 0))
+        with cols[idx % 12]:
+            st.metric(label=f"Nº {num}", value=f"{freq}x")
 else:
-    st.info(f"Dados insuficientes para mapa de calor no Racetrack ({qtd}/20)")
+    st.info(f"Dados insuficientes para mapa de calor ({qtd}/20)")
     
 # ==========================================
 # 10. SINAL ATIVO — GALE & ACOMPANHAMENTO
