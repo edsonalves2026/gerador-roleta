@@ -958,15 +958,10 @@ with st.expander("📖 Manual Completo do Sistema — Regras e Funcionamento", e
     | 🥇 Ouro | Top 5 padrões |
     | 👑 Elite | Apenas Top 3 padrões (maior precisão) |
     
-# ==========================================
-# 📌 RODAPÉ
-# ==========================================
-st.markdown("---")
-st.caption(""")
 
 # ==========================================
 # AUTO-REFRESH CONTROLADO
 # ==========================================
 if modo_operacao == "On-line (Captura Automática)":
-    time.sleep(5)
+    time.sleep(15)
     st.rerun()
