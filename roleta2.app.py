@@ -755,13 +755,14 @@ if qtd >= 20:
         </div>
         """
 
-        st.markdown(html_racetrack, unsafe_html=True)
+        # CORREÇÃO AQUI: unsafe_allow_html=True
+        st.markdown(html_racetrack, unsafe_allow_html=True)
         st.caption("🌡️ Distribuição Racetrack | As cores esquentam dinamicamente conforme a frequência das últimas 200 rodadas.")
     except Exception as e:
         st.error(f"Erro ao renderizar o Racetrack: {e}")
 else:
     st.info(f"Dados insuficientes para mapa de calor no Racetrack ({qtd}/20)")
-
+    
 # ==========================================
 # 10. SINAL ATIVO — GALE & ACOMPANHAMENTO
 # ==========================================
