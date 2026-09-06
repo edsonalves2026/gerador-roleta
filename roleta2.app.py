@@ -565,19 +565,19 @@ def processar_novo_numero(num_novo):
                 permitido = True
             elif filtro_hibrido_opcao == "👑 Elite (Top 3 - Máxima Precisão)" and tier_do_padrao == "👑 Elite (Top 3)":
                 permitido = True
-                if st.session_state.sinal_ativo:
+if st.session_state.sinal_ativo:
         if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
             alvos_atuais = set(st.session_state.alvos_sinal)
             novos_alvos_unicos = set(res_ultimo.get("alvos", [])) - alvos_atuais
-            
+
             # Trava para manter o limite máximo em 8 alvos
             if novos_alvos_unicos and len(alvos_atuais) < 8:
                 vagas = 8 - len(alvos_atuais)
                 novos_adicionados = list(novos_alvos_unicos)[:vagas]
-                
+
                 alvos_finais = list(alvos_atuais) + novos_adicionados
                 st.session_state.alvos_sinal = alvos_finais
-                
+
                 enviar_mensagem_telegram(
                     f"🔄 *FUSÃO DE ALVOS (GALE)*\n"
                     f"Novos alvos adicionados: `{novos_adicionados}`\n"
@@ -585,12 +585,12 @@ def processar_novo_numero(num_novo):
                 )
     elif permitido:
         st.session_state.sinal_ativo = True
-        
+
         # Garante no máximo 8 alvos no sinal de entrada
         alvos_originais = list(dict.fromkeys(res_ultimo["alvos"]))
         st.session_state.alvos_sinal = alvos_originais[:8]
         st.session_state.tentativa_atual = 0
-        
+
         enviar_alerta_telegram(
             res_ultimo["ultimo"],
             res_ultimo["score_num"],
