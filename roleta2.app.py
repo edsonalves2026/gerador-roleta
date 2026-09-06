@@ -530,6 +530,7 @@ def processar_novo_numero(num_novo):
             st.session_state.tentativa_atual = 0
             st.session_state.alvos_sinal = []
             return
+
     if len(st.session_state.historico) >= 20:
         res_ultimo = analisar_rodada_especifica(st.session_state.historico)
         
@@ -565,57 +566,38 @@ def processar_novo_numero(num_novo):
                 permitido = True
             elif filtro_hibrido_opcao == "👑 Elite (Top 3 - Máxima Precisão)" and tier_do_padrao == "👑 Elite (Top 3)":
                 permitido = True
+
+            # Processamento de Sinal Ativo (Gale / Fusão) vs Novo Sinal
             if st.session_state.sinal_ativo:
-            if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
-            alvos_atuais = set(st.session_state.alvos_sinal)
-            novos_alvos_unicos = set(res_ultimo.get("alvos", [])) - alvos_atuais
+                if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
+                    alvos_atuais = set(st.session_state.alvos_sinal)
+                    novos_alvos_unicos = set(res_ultimo.get("alvos", [])) - alvos_atuais
 
-            # Trava para manter o limite máximo em 8 alvos
-            if novos_alvos_unicos and len(alvos_atuais) < 8:
-                vagas = 8 - len(alvos_atuais)
-                novos_adicionados = list(novos_alvos_unicos)[:vagas]
+                    # Trava para manter o limite máximo em 8 alvos acumulados no Gale
+                    if novos_alvos_unicos and len(alvos_atuais) < 8:
+                        vagas = 8 - len(alvos_atuais)
+                        novos_adicionados = list(novos_alvos_unicos)[:vagas]
 
-                alvos_finais = list(alvos_atuais) + novos_adicionados
-                st.session_state.alvos_sinal = alvos_finais
+                        alvos_finais = list(alvos_atuais) + novos_adicionados
+                        st.session_state.alvos_sinal = alvos_finais
 
-                enviar_mensagem_telegram(
-                    f"🔄 *FUSÃO DE ALVOS (GALE)*\n"
-                    f"Novos alvos adicionados: `{novos_adicionados}`\n"
-                    f"Alvos Totais ({len(alvos_finais)}): `{alvos_finais}`"
-                )
-    elif permitido:
-        st.session_state.sinal_ativo = True
+                        enviar_mensagem_telegram(
+                            f"🔄 *FUSÃO DE ALVOS (GALE)*\n"
+                            f"Novos alvos adicionados: `{novos_adicionados}`\n"
+                            f"Alvos Totais ({len(alvos_finais)}): `{alvos_finais}`"
+                        )
+            elif permitido:
+                st.session_state.sinal_ativo = True
 
-        # Garante no máximo 8 alvos no sinal de entrada
-        alvos_originais = list(dict.fromkeys(res_ultimo["alvos"]))
-        st.session_state.alvos_sinal = alvos_originais[:8]
-        st.session_state.tentativa_atual = 0
+                # Garante no máximo 8 alvos no sinal de entrada primário
+                alvos_originais = list(dict.fromkeys(res_ultimo["alvos"]))
+                st.session_state.alvos_sinal = alvos_originais[:8]
+                st.session_state.tentativa_atual = 0
 
-        enviar_alerta_telegram(
-            res_ultimo["ultimo"],
-            res_ultimo["score_num"],
-            res_ultimo["alvos"],
-            [f"Padrão: {padrao}", f"Filtro: {filtro_hibrido_opcao}"],
-            tier_nome=tier_do_padrao,
-            posicao_rank=posicao_rank,
-            taxa_acerto=taxa_acerto,
-            modo_estrategia=estrategia_telegram
-        )
-        enviar_alerta_telegram(
-            res_ultimo["ultimo"],
-            res_ultimo["score_num"],
-            res_ultimo["alvos"],
-            [f"Padrão: {padrao}", f"Filtro: {filtro_hibrido_opcao}"],
-            tier_nome=tier_do_padrao,
-            posicao_rank=posicao_rank,
-            taxa_acerto=taxa_acerto,
-            modo_estrategia=estrategia_telegram
-        )
-           
                 enviar_alerta_telegram(
                     res_ultimo["ultimo"],
                     res_ultimo["score_num"],
-                    res_ultimo["alvos"],
+                    st.session_state.alvos_sinal,
                     [f"Padrão: {padrao}", f"Filtro: {filtro_hibrido_opcao}"],
                     tier_nome=tier_do_padrao,
                     posicao_rank=posicao_rank,
@@ -724,7 +706,7 @@ if st.session_state.historico:
     
     df_exibicao = pd.DataFrame(dados_tabela)
     st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
-
+    
 # ==========================================
 # 9. ESTATÍSTICAS E MAPA DE CALOR
 # ==========================================
