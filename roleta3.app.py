@@ -707,18 +707,23 @@ if st.session_state.historico:
         st.markdown("### 🔥 Quentes / Frias")
         if qtd >= 10:
             cont = pd.Series(ultimas).value_counts().reindex(range(37), fill_value=0)
-            quentes = cont.sort_values(ascending=False).head(12)
-            frias = cont.sort_values(ascending=True).head(12)
-            fig = go.Figure([
-                go.Bar(name='Mais Sorteados', x=quentes.index, y=quentes.values, marker_color='#FF4444'),
-                go.Bar(name='Menos Sorteados', x=frias.index, y=frias.values, marker_color='#4488FF')
-            ])
-            fig.update_layout(template="plotly_dark", barmode='group', height=300,
-                              margin=dict(l=10, r=10, t=30, b=10), showlegend=True)
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # 12 mais frequentes e 12 menos frequentes
+            top_12_quentes = cont.sort_values(ascending=False).head(12)
+            top_12_frias = cont.sort_values(ascending=True).head(12)
+            
+            col_q, col_f = st.columns(2)
+            with col_q:
+                st.markdown("#### 🔥 Mais Sorteados")
+                for num, freq in top_12_quentes.items():
+                    st.markdown(f"<span style='font-size:18px; font-weight:bold; color:#ff6666;'>{num:2d}</span> &nbsp; <span style='color:#cccccc;'>({freq}x)</span>", unsafe_allow_html=True)
+            
+            with col_f:
+                st.markdown("#### ❄️ Menos Sorteados")
+                for num, freq in top_12_frias.items():
+                    st.markdown(f"<span style='font-size:18px; font-weight:bold; color:#6699ff;'>{num:2d}</span> &nbsp; <span style='color:#cccccc;'>({freq}x)</span>", unsafe_allow_html=True)
         else:
             st.info(f"Dados insuficientes ({qtd}/10)")
-
     with c2:
         st.markdown("### 📐 Dúzias / Colunas / Paridade")
         if qtd >= 12:
@@ -743,97 +748,86 @@ if st.session_state.historico:
         else:
             st.info(f"Dados insuficientes ({qtd}/12)")
 
-    with c3:
+        with c3:
         st.markdown("### 🧭 Setores da Roleta — Últimas 200 rodadas")
         if qtd >= 10:
-            # Usa EXATAMENTE as últimas 200 rodadas, na ordem em que saíram
             amostra_setores = st.session_state.historico[:200]
             
             contagem_setores = {}
             for nome, nums in SETORES_ROLETA.items():
-                # Conta quantas vezes cada número do setor apareceu na sequência
                 contagem_setores[nome] = sum(1 for n in amostra_setores if n in nums)
             
-            nomes_setores = list(contagem_setores.keys())
-            valores_setores = list(contagem_setores.values())
-            
-            # Renomeia para exibição amigável
             nomes_exibicao = {
                 "VOISINS_DU_ZERO": "Vizinhos do Zero",
                 "TIERS_DU_CYLINDRE": "Terços do Cilindro",
                 "ORPHELINS": "Órfãos",
                 "ZERO_SPIEL": "Zero Spiel"
             }
-            nomes_legiveis = [nomes_exibicao.get(n, n) for n in nomes_setores]
             
-            cores_setores = px.colors.qualitative.Set3
-            fig_setores = go.Figure(go.Pie(
-                labels=nomes_legiveis, 
-                values=valores_setores,
-                marker=dict(colors=cores_setores), 
-                textinfo='label+value+percent',
-                textposition='outside',
-                hole=0.3,
-                name="Setores"
-            ))
-            fig_setores.update_layout(
-                template="plotly_dark", 
-                height=300,
-                margin=dict(l=10, r=10, t=30, b=10),
-                showlegend=True,
-                legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=-0.1)
-            )
-            st.plotly_chart(fig_setores, use_container_width=True)
+            # Exibição em tabela com contagem e porcentagem
+            dados_setores = []
+            for chave, valor in contagem_setores.items():
+                nome_legivel = nomes_exibicao.get(chave, chave)
+                pct = round(valor / len(amostra_setores) * 100, 1)
+                dados_setores.append({"Setor": nome_legivel, "Quantidade": valor, "%": pct})
             
-            # Tabela de detalhes
-            st.markdown("📋 **Contagem detalhada — Últimas 200 rodadas:**")
-            df_setores = pd.DataFrame({
-                "Setor": nomes_legiveis,
-                "Quantidade": valores_setores,
-                "%": [round(v / len(amostra_setores) * 100, 1) for v in valores_setores]
-            })
+            df_setores = pd.DataFrame(dados_setores)
             st.dataframe(df_setores, use_container_width=True, hide_index=True)
+            
+            # Visualização gráfica dos setores no cilindro
+            st.markdown("##### 🎯 Divisão dos Setores")
+            st.markdown("""
+            <div style='background-color:#1a1a1a; padding:10px; border-radius:8px; text-align:center;'>
+                <span style='background-color:#cc4444; padding:6px 12px; border-radius:4px; margin:3px;'>TERÇOS</span>
+                <span style='background-color:#4488cc; padding:6px 12px; border-radius:4px; margin:3px;'>ÓRFÃOS</span>
+                <span style='background-color:#cc8844; padding:6px 12px; border-radius:4px; margin:3px;'>VIZINHOS DO ZERO</span>
+                <span style='background-color:#44aa66; padding:6px 12px; border-radius:4px; margin:3px;'>ZERO SPIEL</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
         else:
             st.info(f"Dados insuficientes ({qtd}/10)")
     
     # === MAPA DE CALOR ===
-    st.markdown("---")
+        st.markdown("---")
     st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro")
     if qtd >= 20:
         cont = pd.Series(ultimas).value_counts().reindex(range(37), fill_value=0)
         max_freq = max(cont.values) if max(cont.values) > 0 else 1
 
-        # Monta visualização na ordem física do cilindro europeu
-        ordem_cilindro = CILINDRO_EUROPEU
-        linha1, linha2, linha3 = [], [], []
-        cores_fundo = []
+        # Ordem EXATA do cilindro europeu dividida em 3 linhas
+        ordem = CILINDRO_EUROPEU
+        linhas = [ordem[0:13], ordem[13:26], ordem[26:37]]
 
-        # Organiza em 3 linhas para exibição visual
-        for i, num in enumerate(ordem_cilindro):
-            freq = cont[num]
-            intensidade = freq / max_freq
-            # Cores: vermelho (quente) → amarelo → azul (frio)
-            cor = f"rgba(255, {int(255*(1-intensidade))}, 0, {0.3 + intensidade*0.7})"
-            estilo = f"background-color: {cor}; color: {'black' if intensidade < 0.5 else 'white'}; font-weight: bold; text-align: center; padding: 8px; border-radius: 4px;"
-            conteudo = f"**{num}**<br>({freq})"
-
-            if i < 13:
-                linha1.append((conteudo, estilo))
-            elif i < 26:
-                linha2.append((conteudo, estilo))
-            else:
-                linha3.append((conteudo, estilo))
-
-        # Renderiza tabela colorida
-        for linha in [linha1, linha2, linha3]:
+        for linha in linhas:
             cols = st.columns(len(linha))
-            for c, (conteudo, estilo) in zip(cols, linha):
-                c.markdown(f"<div style='{estilo}'>{conteudo}</div>", unsafe_allow_html=True)
+            for c, num in zip(cols, linha):
+                freq = cont[num]
+                intensidade = freq / max_freq if max_freq > 0 else 0
+                
+                # Gradiente: vermelho quente → laranja → amarelo → marrom → frio
+                if intensidade > 0.75:
+                    cor_fundo = f"rgba(220, 40, 40, {0.6 + intensidade*0.4})"
+                elif intensidade > 0.50:
+                    cor_fundo = f"rgba(230, 120, 20, {0.5 + intensidade*0.4})"
+                elif intensidade > 0.25:
+                    cor_fundo = f"rgba(210, 160, 30, {0.4 + intensidade*0.4})"
+                else:
+                    cor_fundo = f"rgba(100, 80, 20, {0.3 + intensidade*0.3})"
+                
+                cor_texto = "white" if intensidade > 0.4 else "#ffdd88"
+                c.markdown(f"""
+                <div style='background-color:{cor_fundo}; color:{cor_texto}; 
+                text-align:center; padding:10px 4px; border-radius:6px; 
+                font-weight:bold; font-size:16px; line-height:1.2;'>
+                <b>{num}</b><br><span style='font-size:11px; opacity:0.8;'>({freq})</span>
+                </div>
+                """, unsafe_allow_html=True)
 
-        st.caption("🌡️ Cor mais quente = maior frequência nas últimas 200 rodadas")
+        st.caption("🌡️ Cor mais quente = maior frequência nas últimas 200 rodadas | Ordem exata do cilindro europeu")
     else:
         st.info(f"Dados insuficientes para mapa de calor ({qtd}/20)")
-
+        
     # === RANKING DE PADRÕES ===
     st.markdown("---")
     st.subheader("🏆 Ranking de Padrões — Taxa de Acerto Histórica")
