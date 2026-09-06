@@ -706,7 +706,7 @@ if st.session_state.get('sinal_ativo', False):
 else:
     st.success("✅ Nenhum sinal ativo — Aguardando padrão convergente...")
 
-  # Alerta Manual
+    # Alerta Manual
     historico_analise = list(reversed(st.session_state.historico))
     res_ultimo = analisar_rodada_especifica(historico_analise)
     if res_ultimo["score_num"] >= 4:
