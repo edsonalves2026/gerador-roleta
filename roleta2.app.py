@@ -620,7 +620,7 @@ qtd = len(ultimas_80)
 
 if qtd >= 20:
     try:
-        cont = pd.Series(ultimas_200).value_counts().reindex(range(37), fill_value=0)
+        cont = pd.Series(ultimas_80).value_counts().reindex(range(37), fill_value=0)
         max_freq = int(max(cont.values)) if max(cont.values) > 0 else 1
 
         VERMELHOS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
