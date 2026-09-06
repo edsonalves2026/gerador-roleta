@@ -676,10 +676,10 @@ else:
                 del st.session_state[chave]
         st.rerun()
 
-st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
+st.subheader("Esteira Temporal (Janela de 13 Rodadas)")
 if st.session_state.historico:
-    esteira = st.session_state.historico[:14]
-    cols = st.columns(min(len(esteira), 14))
+    esteira = st.session_state.historico[:13]
+    cols = st.columns(min(len(esteira), 13))
     for i, num in enumerate(esteira):
         with cols[i]:
             st.metric(label=f"Pos {i+1:02d}", value=num)
@@ -695,10 +695,10 @@ if st.session_state.historico and len(st.session_state.historico) >= 2:
         
         c_prio, c_cob = st.columns(2)
         with c_prio:
-            st.error(f"🔥 **PRIORIDADE MÁXIMA (Ainda não saíram nas 200 rodadas):**\n\n`{res_brk_painel['prioridade_maxima']}`")
+            st.error(f"🔥 **PRIORIDADE MÁXIMA (Ainda não saíram nas 100 rodadas):**\n\n`{res_brk_painel['prioridade_maxima']}`")
         with c_cob:
             st.warning(f"🛡️ **COBERTURA (Já saíram no histórico):**\n\n`{res_brk_painel['cobertura']}`")
-        st.info("⏱️ **Estratégia Recomendada:** Manter apostas neste grupo pelas próximas **3 a 4 rodadas**.")
+        st.info("⏱️ **Estratégia Recomendada:** Manter apostas neste grupo pelas próximas **3 rodadas**.")
 
 if st.session_state.ultimo_resultado:
     if "GREEN" in st.session_state.ultimo_resultado:
@@ -739,7 +739,7 @@ if st.session_state.historico:
     st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
 
     tiers_atuais, df_rank = obter_tiers_cache()
-    with st.expander("🏆 Ranking dos Padrões (Últimas 200 Rodadas)", expanded=False):
+    with st.expander("🏆 Ranking dos Padrões (Últimas 80 Rodadas)", expanded=False):
         if not df_rank.empty:
             st.dataframe(df_rank, use_container_width=True, hide_index=True)
         else:
@@ -779,7 +779,7 @@ else:
 # ==========================================
 if st.session_state.historico:
     st.markdown("---")
-    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 100)")
+    st.subheader("📊 Estatísticas das Rodadas (Quentes/Frios, Avançada, Últimas 200)")
     
     total_disponivel = len(st.session_state.historico)
     max_amostra = min(200, total_disponivel)
@@ -842,35 +842,124 @@ if st.session_state.historico:
         
         st.caption(f"**Par:** {round((par/total_amostra)*100)}% | **Ímpar:** {round((impar/total_amostra)*100)}% | **1-18:** {round((baixas/total_amostra)*100)}% | **19-36:** {round((altas/total_amostra)*100)}%")
 
-    with col_g3:
-        st.markdown(f"### 📊 MAPA DE CALOR (MESA)")
-        
-        matriz_freq = {n: amostra.count(n) for n in range(0, 37)}
-        
-        grid_mesa = [
-            [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
-            [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
-            [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
-        ]
-        
-        z_values = [[matriz_freq[num] for num in lin] for lin in grid_mesa]
-        text_values = [[f"{num}<br>({matriz_freq[num]}x)" for num in lin] for lin in grid_mesa]
-        
-        fig_heat = go.Figure(data=go.Heatmap(
-            z=z_values,
-            text=text_values,
-            texttemplate="%{text}",
-            colorscale='Viridis',
-            showscale=False
-        ))
-        
-        fig_heat.update_layout(
-            title=f"Frequência na Mesa (Zero = {matriz_freq[0]}x)",
-            template="plotly_dark",
-            height=280,
-            margin=dict(l=5, r=5, t=30, b=5),
-            xaxis=dict(showticklabels=False),
-            yaxis=dict(showticklabels=False)
-        )
-        
-        st.plotly_chart(fig_heat, use_container_width=True)
+   with c3:
+        st.markdown("### 🎨 Mapa de Cores — Últimas 100")
+        if qtd > 0:
+            linhas_html = []
+            amostra_mapa = ultimas[:100]
+            for i in range(0, len(amostra_mapa), 10):
+                bloco = amostra_mapa[i:i+10]
+                html_bloco = "<div style='display:flex;gap:4px;margin:3px 0;'>"
+                for n in bloco:
+                    if n == 0:
+                        bg_cor = "#00AA00"
+                    elif n in NUMEROS_VERMELHOS:
+                        bg_cor = "#FF2222"
+                    else:
+                        bg_cor = "#000000"
+                    html_bloco += f"<span style='background-color:{bg_cor};color:#FFF;border-radius:4px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;'>{n}</span>"
+                html_bloco += "</div>"
+                linhas_html.append(html_bloco)
+            st.markdown("".join(linhas_html), unsafe_allow_html=True)
+        else:
+            st.info("Aguardando dados...")
+
+# ==========================================
+# 🏆 RANKING DOS PADRÕES
+# ==========================================
+st.markdown("---")
+st.subheader("🏆 Ranking de Padrões — Taxa de Acerto Histórica")
+
+tiers, df_rank = obter_tiers_cache()
+
+if not df_rank.empty and len(df_rank) >= 1:
+    st.dataframe(
+        df_rank,
+        column_config={
+            "Padrão": st.column_config.TextColumn("Padrão Detectado"),
+            "Total": st.column_config.NumberColumn("Sinais Emitidos", width="small"),
+            "Acertos": st.column_config.NumberColumn("Acertos ✅", width="small"),
+            "Taxa de Acerto (%)": st.column_config.ProgressColumn(
+                "Taxa de Acerto",
+                format="%.1f%%",
+                min_value=0,
+                max_value=100
+            )
+        },
+        use_container_width=True,
+        hide_index=True,
+        height=400
+    )
+
+    st.markdown("### 📹 Faixas de Classificação")
+    e1, e2, e3, e4 = st.columns(4)
+    e1.info(f"👑 **ELITE (Top 3):** {', '.join(tiers.get('ELITE_TOP_3', ['—']))}")
+    e2.success(f"🥇 **OURO (Top 5):** {', '.join(tiers.get('SELECAO_OURO_TOP_5', ['—']))}")
+    e3.info(f"🥈 **SELEÇÃO (Top 10):** {len(tiers.get('SELECAO_TOP_10', []))} padrões")
+    e4.info(f"🥉 **RADAR (Top 30):** {len(tiers.get('RADAR_TOP_30', []))} padrões")
+
+    st.caption("ℹ️ Ranking atualizado conforme histórico cresce. Mínimo de 20 rodadas para cálculo.")
+else:
+    st.info("📊 Dados insuficientes para gerar ranking.\n\n⏳ São necessárias pelo menos **20 rodadas** no histórico para calcular a taxa de acerto dos padrões.")
+
+# ==========================================
+# 📖 MANUAL E REGRAS
+# ==========================================
+st.markdown("---")
+with st.expander("📖 Manual Completo do Sistema — Regras e Funcionamento", expanded=False):
+    st.markdown("""
+    ### 🎯 Sistema TIRO CERTO + HEAD-SHOT
+
+    **Objetivo:** Identificar padrões estatísticos com convergência de critérios e sugerir números com maior probabilidade de sair.
+
+    ---
+    ### 📐 Critérios de Pontuação
+    | Critério | Pontuação |
+    |---|---|
+    | Número ausente no grupo BRK | +3.0 |
+    | Primeiro puxador mais frequente | +2.5 |
+    | Segundo puxador | +1.5 |
+    | Número invertido | +1.5 |
+    | Vizinhos imediatos (esq/dir) | +1.0 cada |
+    | Número quente (últimos 100) | +1.0 |
+    | Número da posição 13 | +1.0 |
+    | Convergência de múltiplos critérios | +2.0 por critério extra |
+
+    **Limiares de disparo:**
+    - **Score ≥ 3.0 + mínimo 4 alvos → 🎯 TIRO CERTO**
+    - **Score ≥ 7.5 + maturação + não saiu nas últimas 5 → 💥 HEAD-SHOT**
+
+    ---
+    ### 🟢 Regras de Acerto e Gale
+    - ✅ Acertou → **GREEN** (sinal encerrado)
+    - ❌ Errou → avança para **Gale 1 (G1)**
+    - ❌ Errou de novo → avança para **Gale 2 (G2)**
+    - ❌ 3 erros seguidos → **LOSS** (sinal encerrado)
+    - O número **0** sempre conta como acerto
+
+    ---
+    ### 🎛️ Níveis de Filtro
+    | Nível | Aplica apenas padrões |
+    |---|---|
+    | Desativado | Emite todos os sinais detectados |
+    | 🥉 Radar | Top 30 padrões com maior taxa de acerto |
+    | 🥈 Seleção | Top 10 padrões |
+    | 🥇 Ouro | Top 5 padrões |
+    | 👑 Elite | Apenas Top 3 padrões (maior precisão) |
+    
+# ==========================================
+# 📌 RODAPÉ
+# ==========================================
+st.markdown("---")
+st.caption("""
+⚡ Radar de Roleta Pro — Sistema TIRO CERTO + HEAD-SHOT com Score Ponderado
+✅ Validação BRK + Padrões Históricos + Ranking de Assertividade
+🔄 Atualização automática a cada 15s | 🤖 Alertas via Telegram | v3.0 Otimizado
+""")
+
+# ==========================================
+# AUTO-REFRESH CONTROLADO
+# ==========================================
+if modo_operacao == "On-line (Captura Automática)":
+    time.sleep(5)
+    st.rerun()
