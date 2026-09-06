@@ -87,10 +87,6 @@ URLS_ROLETAS = {
 # 2. BUSCA DINÂMICA (MATRIZ DE TRANSIÇÃO 0-36)
 # ==========================================
 def buscar_puxadores_dinamicos(numero_alvo, historico):
-    """
-    Mapeia a frequência do vetor de probabilidade no histórico.
-    Busca o número alvo e retorna até 4 dezenas de maior frequência transicional.
-    """
     if len(historico) < 2:
         return []
     
@@ -366,7 +362,6 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     alvos = set()
     filtros_ativos = []
 
-    # Mapeamento completo das 4 dezenas
     puxadores_brk = TABELA_PUXADORES_FIXA_BRK.get(ultimo, [])
     puxadores_dinamico = buscar_puxadores_dinamicos(ultimo, sub_historico)
 
@@ -382,7 +377,6 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
         filtros_ativos.append(f"OcultosBRK(G{res_brk['grupo_confirmado']})")
         alvos.update(res_brk["grupo_completo"])
 
-    # Inclui TODAS as 4 dezenas puxadoras para cruzamento completo com os filtros
     if puxadores_ativos:
         score += 1
         filtros_ativos.append("Puxadores")
@@ -771,168 +765,150 @@ if st.session_state.historico:
                 st.success(msg)
             else:
                 st.error(msg)
-else:
-    st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # ==========================================
 # 9. ESTATÍSTICAS E MAPA DE CORES (200 RODADAS)
 # ==========================================
-st.markdown("---")
-st.subheader("📈 Estatísticas — Últimas 200 Rodadas")
 if st.session_state.historico:
-    ultimas = st.session_state.historico[:200]
-    qtd = len(ultimas)
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
+    st.markdown("---")
+    st.subheader("📈 Estatísticas — Últimas 200 Rodadas")
+    
+    # Amostra fixa das últimas 200 rodadas (ou total disponível)
+    amostra = list(reversed(st.session_state.historico[:200]))
+    total_amostra = len(amostra)
+    
+    col_e1, col_e2, col_e3 = st.columns(3)
+    
+    # ------------------------------------------
+    # COLUNA 1: QUENTES / FRIAS
+    # ------------------------------------------
+    with col_e1:
         st.markdown("### 🔥 Quentes / Frias")
-        if qtd >= 10:
-            cont = pd.Series(ultimas).value_counts().reindex(range(37), fill_value=0)
-            quentes = cont.sort_values(ascending=False).head(12)
-            frias = cont.sort_values(ascending=True).head(12)
-            fig = go.Figure([
-                go.Bar(name='Mais Sorteados', x=quentes.index, y=quentes.values, marker_color='#FF4444'),
-                go.Bar(name='Menos Sorteados', x=frias.index, y=frias.values, marker_color='#4488FF')
-            ])
-            fig.update_layout(barmode='group', height=300, margin=dict(l=10, r=10, t=30, b=10), showlegend=True)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info(f"Dados insuficientes ({qtd}/10)")
-
-    with c2:
-        st.markdown("### 📐 Dúzias / Colunas / Paridade")
-        if qtd >= 12:
-            est = calcular_estatisticas(ultimas)
-            categorias = ['D1\n1-12', 'D2\n13-24', 'D3\n25-36', 'C1', 'C2', 'C3', 'Pares', 'Ímpares', 'Baixas\n1-18', 'Altas\n19-36']
-            valores = [
-                est.get('d1', 0), est.get('d2', 0), est.get('d3', 0),
-                est.get('c1', 0), est.get('c2', 0), est.get('c3', 0),
-                est.get('par', 0), est.get('impar', 0),
-                est.get('baixas', 0), est.get('altas', 0)
-            ]
-            cores = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#2ECC71', '#E74C3C', '#3498DB', '#E67E22']
-            fig2 = go.Figure(data=[go.Bar(x=categorias, y=valores, marker_color=cores)])
-            fig2.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=60), showlegend=False)
-            st.plotly_chart(fig2, use_container_width=True)
-        else:
-            st.info(f"Dados insuficientes ({qtd}/12)")
-
-    with c3:
-        st.markdown("### 🎨 Mapa de Cores — Últimas 100")
-        if qtd > 0:
-            linhas_html = []
-            amostra_mapa = ultimas[:100]
-            for i in range(0, len(amostra_mapa), 10):
-                bloco = amostra_mapa[i:i+10]
-                html_bloco = "<div style='display:flex;gap:4px;margin:3px 0;'>"
-                for n in bloco:
-                    if n == 0:
-                        bg_cor = "#00AA00"
-                    elif n in NUMEROS_VERMELHOS:
-                        bg_cor = "#FF2222"
-                    else:
-                        bg_cor = "#000000"
-                    html_bloco += f"<span style='background-color:{bg_cor};color:#FFF;border-radius:4px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;'>{n}</span>"
-                html_bloco += "</div>"
-                linhas_html.append(html_bloco)
-            st.markdown("".join(linhas_html), unsafe_allow_html=True)
-        else:
-            st.info("Aguardando dados...")
+        contagem = pd.Series(amostra).value_counts().reindex(range(0, 37), fill_value=0)
+        mediana = contagem.median()
         
-# ==========================================
-# 🏆 RANKING DOS PADRÕES
-# ==========================================
-st.markdown("---")
-st.subheader("🏆 Ranking de Padrões — Taxa de Acerto Histórica")
+        df_qf = pd.DataFrame({
+            'Número': contagem.index,
+            'Frequência': contagem.values,
+            'Tipo': ['Mais Sorteados' if v >= mediana else 'Menos Sorteados' for v in contagem.values]
+        })
+        
+        fig_qf = px.bar(
+            df_qf, 
+            x='Número', 
+            y='Frequência', 
+            color='Tipo',
+            color_discrete_map={'Mais Sorteados': '#EF4444', 'Menos Sorteados': '#3B82F6'}
+        )
+        fig_qf.update_layout(
+            template="plotly_dark",
+            height=320,
+            margin=dict(l=10, r=10, t=20, b=20),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            xaxis=dict(title=None, tickmode='linear', tick0=0, dtick=10),
+            yaxis=dict(title=None)
+        )
+        st.plotly_chart(fig_qf, use_container_width=True)
 
-tiers, df_rank = obter_tiers_cache()
+    # ------------------------------------------
+    # COLUNA 2: DÚZIAS / COLUNAS / PARIDADE
+    # ------------------------------------------
+    with col_e2:
+        st.markdown("### 📐 Dúzias / Colunas / Paridade")
+        
+        d1 = sum(1 for n in amostra if 1 <= n <= 12)
+        d2 = sum(1 for n in amostra if 13 <= n <= 24)
+        d3 = sum(1 for n in amostra if 25 <= n <= 36)
+        
+        c1 = sum(1 for n in amostra if n > 0 and n % 3 == 1)
+        c2 = sum(1 for n in amostra if n > 0 and n % 3 == 2)
+        c3 = sum(1 for n in amostra if n > 0 and n % 3 == 0)
+        
+        par = sum(1 for n in amostra if n > 0 and n % 2 == 0)
+        impar = sum(1 for n in amostra if n % 2 != 0)
+        baixas = sum(1 for n in amostra if 1 <= n <= 18)
+        altas = sum(1 for n in amostra if 19 <= n <= 36)
+        
+        df_dcp = pd.DataFrame({
+            'Categoria': ['D1 1-12', 'D2 13-24', 'D3 25-36', 'C1', 'C2', 'C3', 'Pares', 'Ímpares', 'Baixas 1-18', 'Altas 19-36'],
+            'Quantidade': [d1, d2, d3, c1, c2, c3, par, impar, baixas, altas]
+        })
+        
+        fig_dcp = px.bar(
+            df_dcp, 
+            x='Categoria', 
+            y='Quantidade', 
+            color='Categoria',
+            color_discrete_sequence=['#F87171', '#38BDF8', '#A7F3D0', '#FDE047', '#DDD6FE', '#C084FC', '#22C55E', '#EF4444', '#3B82F6', '#F97316']
+        )
+        fig_dcp.update_layout(
+            template="plotly_dark",
+            height=320,
+            showlegend=False,
+            margin=dict(l=10, r=10, t=20, b=20),
+            xaxis=dict(title=None, tickangle=-30),
+            yaxis=dict(title=None)
+        )
+        st.plotly_chart(fig_dcp, use_container_width=True)
 
-if not df_rank.empty and len(df_rank) >= 1:
-    st.dataframe(
-        df_rank,
-        column_config={
-            "Padrão": st.column_config.TextColumn("Padrão Detectado"),
-            "Total": st.column_config.NumberColumn("Sinais Emitidos", width="small"),
-            "Acertos": st.column_config.NumberColumn("Acertos ✅", width="small"),
-            "Taxa de Acerto (%)": st.column_config.ProgressColumn(
-                "Taxa de Acerto",
-                format="%.1f%%",
-                min_value=0,
-                max_value=100
-            )
-        },
-        use_container_width=True,
-        hide_index=True,
-        height=400
-    )
-
-    st.markdown("### 📹 Faixas de Classificação")
-    e1, e2, e3, e4 = st.columns(4)
-    e1.info(f"👑 **ELITE (Top 3):** {', '.join(tiers.get('ELITE_TOP_3', ['—']))}")
-    e2.success(f"🥇 **OURO (Top 5):** {', '.join(tiers.get('SELECAO_OURO_TOP_5', ['—']))}")
-    e3.info(f"🥈 **SELEÇÃO (Top 10):** {len(tiers.get('SELECAO_TOP_10', []))} padrões")
-    e4.info(f"🥉 **RADAR (Top 30):** {len(tiers.get('RADAR_TOP_30', []))} padrões")
-
-    st.caption("ℹ️ Ranking atualizado conforme histórico cresce. Mínimo de 20 rodadas para cálculo.")
+    # ------------------------------------------
+    # COLUNA 3: MAPA DE CORES — ÚLTIMAS 100
+    # ------------------------------------------
+    with col_e3:
+        st.markdown("### 🎨 Mapa de Cores — Últimas 100")
+        
+        amostra_100 = st.session_state.historico[:100]
+        
+        VERMELHOS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
+        
+        def obter_cor_hex(num):
+            if num == 0:
+                return '#15803D' # Verde
+            return '#B91C1C' if num in VERMELHOS else '#1F2937' # Vermelho / Preto
+        
+        grid_numeros = []
+        grid_cores = []
+        
+        for i in range(0, 100, 10):
+            linha_nums = amostra_100[i:i+10]
+            if len(linha_nums) < 10:
+                linha_nums += [None] * (10 - len(linha_nums))
+            grid_numeros.append(linha_nums)
+            grid_cores.append([obter_cor_hex(n) if n is not None else '#000000' for n in linha_nums])
+        
+        z_dummy = [[1]*10 for _ in range(len(grid_numeros))]
+        text_grid = [[str(n) if n is not None else "" for n in lin] for lin in grid_numeros]
+        
+        fig_mapa = go.Figure(data=go.Heatmap(
+            z=z_dummy,
+            text=text_grid,
+            texttemplate="%{text}",
+            textfont=dict(size=12, color="white", family="Arial Black"),
+            showscale=False,
+            hoverinfo='none'
+        ))
+        
+        shapes = []
+        for r_idx, row in enumerate(grid_cores):
+            for c_idx, color in enumerate(row):
+                shapes.append(dict(
+                    type="rect",
+                    xref="x", yref="y",
+                    x0=c_idx - 0.5, y0=r_idx - 0.5,
+                    x1=c_idx + 0.5, y1=r_idx + 0.5,
+                    fillcolor=color,
+                    line=dict(width=1, color="#111827"),
+                    layer="below"
+                ))
+                
+        fig_mapa.update_layout(
+            template="plotly_dark",
+            height=320,
+            margin=dict(l=5, r=5, t=10, b=5),
+            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, autorange="reversed"),
+            shapes=shapes
+        )
+        st.plotly_chart(fig_mapa, use_container_width=True)
 else:
-    st.info("📊 Dados insuficientes para gerar ranking.\n\n⏳ São necessárias pelo menos **20 rodadas** no histórico para calcular a taxa de acerto dos padrões.")
-
-# ==========================================
-# 📖 MANUAL E REGRAS
-# ==========================================
-st.markdown("---")
-with st.expander("📖 Manual Completo do Sistema — Regras e Funcionamento", expanded=False):
-    st.markdown("""
-    ### 🎯 Sistema TIRO CERTO + HEAD-SHOT
-
-    **Objetivo:** Identificar padrões estatísticos com convergência de critérios e sugerir números com maior probabilidade de sair.
-
-    ---
-    ### 📐 Critérios de Pontuação
-    | Critério | Pontuação |
-    |---|---|
-    | Número ausente no grupo BRK | +3.0 |
-    | Primeiro puxador mais frequente | +2.5 |
-    | Segundo puxador | +1.5 |
-    | Número invertido | +1.5 |
-    | Vizinhos imediatos (esq/dir) | +1.0 cada |
-    | Número quente (últimos 100) | +1.0 |
-    | Número da posição 13 | +1.0 |
-    | Convergência de múltiplos critérios | +2.0 por critério extra |
-
-    **Limiares de disparo:**
-    - **Score ≥ 3.0 + mínimo 4 alvos → 🎯 TIRO CERTO**
-    - **Score ≥ 7.5 + maturação + não saiu nas últimas 5 → 💥 HEAD-SHOT**
-
-    ---
-    ### 🟢 Regras de Acerto e Gale
-    - ✅ Acertou → **GREEN** (sinal encerrado)
-    - ❌ Errou → avança para **Gale 1 (G1)**
-    - ❌ Errou de novo → avança para **Gale 2 (G2)**
-    - ❌ 3 erros seguidos → **LOSS** (sinal encerrado)
-    - O número **0** sempre conta como acerto
-
-    ---
-    ### 🎛️ Níveis de Filtro
-    | Nível | Aplica apenas padrões |
-    |---|---|
-    | Desativado | Emite todos os sinais detectados |
-    | 🥉 Radar | Top 30 padrões com maior taxa de acerto |
-    | 🥈 Seleção | Top 10 padrões |
-    | 🥇 Ouro | Top 5 padrões |
-    | 👑 Elite | Apenas Top 3 padrões (maior precisão) |
-    
----
-    ### ⚙️ Requisição API
-    - Atualização automática a cada **15 segundos** (apenas quando houver novo número)
-    - Timeout de proteção: **8 segundos** por requisição
-    - Limite de histórico carregado: **200 rodadas**
-    """)
-    
-    
-# ==========================================
-# AUTO-REFRESH CONTROLADO
-# ==========================================
-if modo_operacao == "On-line (Captura Automática)":
-    time.sleep(15)
-    st.rerun()
+    st.info("Aguardando dados da API ou inserção manual no painel lateral...")
