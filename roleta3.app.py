@@ -747,8 +747,8 @@ if st.session_state.historico:
             st.plotly_chart(fig_meta, use_container_width=True)
         else:
             st.info(f"Dados insuficientes ({qtd}/12)")
-
-           with c3:
+            
+            with c3:
         st.markdown("### 🧭 Setores da Roleta — Últimas 200 rodadas")
         if qtd >= 10:
             amostra_setores = st.session_state.historico[:200]
