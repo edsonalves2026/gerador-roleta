@@ -667,7 +667,7 @@ if st.session_state.historico and len(st.session_state.historico) >= 2:
             st.error(f"🔥 **PRIORIDADE MÁXIMA (Ainda não saíram nas 30 rodadas):**\n\n`{res_brk_painel['prioridade_maxima']}`")
         with c_cob:
             st.warning(f"🛡️ **COBERTURA (Já saíram no histórico):**\n\n`{res_brk_painel['cobertura']}`")
-        st.info("⏱️ **Estratégia Recomendada:** Manter apostas neste grupo pelas próximas **3 rodadas**.")
+        st.info("⏱️ **Estratégia Recomendada:** Manter apostas neste grupo pelas próximas **2 rodadas**.")
 
 if st.session_state.ultimo_resultado:
     if "GREEN" in st.session_state.ultimo_resultado:
@@ -682,7 +682,7 @@ st.subheader("🚨 Sinal Ativo & Acompanhamento")
 
 if st.session_state.get('sinal_ativo', False):
     tentativa = st.session_state.get('tentativa_atual', 0)
-    st.warning(f"⚠️ **SINAL EM ANDAMENTO — Tentativa {tentativa + 1}/3**")
+    st.warning(f"⚠️ **SINAL EM ANDAMENTO — Tentativa {tentativa + 1}/2**")
     
     alvos = st.session_state.get('alvos_sinal', [])
     alvos_exibicao = [str(n) for n in alvos]
@@ -691,8 +691,8 @@ if st.session_state.get('sinal_ativo', False):
     st.markdown(f"## `{' | '.join(alvos_exibicao)}`")
     st.info("🛡️ Proteção recomendada: Apostar também no **0 (Zero)** para cobertura.")
 
-    progresso = (tentativa + 1) / 3
-    st.progress(min(progresso, 1.0), text=f"Rodada {tentativa + 1} de 3 (Limite de Gales)")
+    progresso = (tentativa + 1) / 2
+    st.progress(min(progresso, 1.0), text=f"Rodada {tentativa + 1} de 2 (Limite de Gales)")
 
     dica_etapa = {
         0: "💰 Entrada — Valor Base",
@@ -737,7 +737,44 @@ if st.session_state.historico:
     
     df_exibicao = pd.DataFrame(dados_tabela)
     st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
-    
+
+  # Ranking dos Tiers
+    tiers_atuais, df_rank = obter_tiers_cache()
+    with st.expander("🏆 Ranking dos Padrões (Últimas 200 Rodadas)", expanded=False):
+        if not df_rank.empty:
+            st.dataframe(df_rank, use_container_width=True, hide_index=True)
+        else:
+            st.info("Aguardando histórico suficiente (mínimo ~20 sinais) para consolidação do ranking.")
+
+    # Alerta Manual
+    historico_analise = list(reversed(st.session_state.historico))
+    res_ultimo = analisar_rodada_especifica(historico_analise)
+    if res_ultimo["score_num"] >= 4:
+        st.error(f"🚨 SINAL IDENTIFICADO: {res_ultimo['alvos']}")
+            
+        if st.button("📤 Reenviar Alerta para Telegram"):
+            posicao_rank = None
+            taxa_acerto = None
+            if not df_rank.empty and res_ultimo["padrao_nome"] in df_rank["Padrão"].values:
+                idx = df_rank[df_rank["Padrão"] == res_ultimo["padrao_nome"]].index[0]
+                posicao_rank = idx + 1
+                taxa_acerto = df_rank.loc[idx, "Taxa de Acerto (%)"]
+            
+            sucesso, msg = enviar_alerta_telegram(
+                res_ultimo["ultimo"],
+                res_ultimo["score_num"],
+                res_ultimo["alvos"],
+                [res_ultimo["status"]],
+                posicao_rank=posicao_rank,
+                taxa_acerto=taxa_acerto
+            )
+            if sucesso:
+                st.success(msg)
+            else:
+                st.error(msg)
+else:
+    st.info("Aguardando dados da API ou inserção manual no painel lateral...")
+
 # ==========================================
 # 9. ESTATÍSTICAS E MAPA DE CALOR
 # ==========================================
