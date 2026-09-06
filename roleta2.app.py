@@ -476,193 +476,8 @@ else:
 st.markdown("---")
 
 # ==========================================
-# 8. INTERFACE STREAMLIT
+# 8. TABELA ANALÍTICA
 # ==========================================
-st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
-st.sidebar.header("🕹️ Painel de Operação")
-modo_operacao = st.sidebar.selectbox(
-    "🌐 Modo de Operação:",
-    ["On-line (Captura Automática)", "Off-line (Digitação Manual)"]
-)
-roleta_selecionada = st.sidebar.selectbox(
-    "🎰 Selecionar Roleta:",
-    list(URLS_ROLETAS.keys())
-)
-st.sidebar.markdown("---")
-st.sidebar.subheader("🎛️ Filtro Híbrido de Assertividade (200 Rodadas)")
-filtro_hibrido_opcao = st.sidebar.selectbox(
-    "Nível de Filtragem dos Sinais:",
-    [
-        "Desativado (Usar apenas regras fixas)",
-        "🥉 Radar (Top 30 - Permissivo)",
-        "🥈 Seleção (Top 10 - Equilibrado)",
-        "🥇 Seleção Ouro (Top 5 - Conservador)",
-        "👑 Elite (Top 3 - Máxima Precisão)"
-    ],
-    index=2
-)
-modo_gale_opcao = st.sidebar.radio(
-    "Estratégia no Gale ao detectar novo Sinal Elite:",
-    ["Opção A: Mantém Sinal A (Aposta Fixa)", "Opção B: Fusão de Alvos Únicos (A + B)"],
-    index=1
-)
-st.sidebar.markdown("---")
-
-def processar_novo_numero(num_novo):
-    if st.session_state.sinal_ativo:
-        st.session_state.tentativa_atual += 1
-        etapas = {1: "Entrada Direta", 2: "Gale 1 (G1)", 3: "Gale 2 (G2)"}
-        etapa_nome = etapas.get(st.session_state.tentativa_atual, f"Gale {st.session_state.tentativa_atual - 1}")
-        
-        alvos_com_zero = set(st.session_state.alvos_sinal).union({0})
-        if num_novo in alvos_com_zero:
-            st.session_state.ultimo_resultado = f"GREEN ✅ ({etapa_nome})"
-            enviar_resultado_telegram("GREEN", num_novo, etapa_nome)
-            st.session_state.sinal_ativo = False
-            st.session_state.tentativa_atual = 0
-            st.session_state.alvos_sinal = []
-            return
-        elif st.session_state.tentativa_atual >= 3:
-            st.session_state.ultimo_resultado = "LOSS / RED ❌"
-            enviar_resultado_telegram("LOSS", num_novo)
-            st.session_state.sinal_ativo = False
-            st.session_state.tentativa_atual = 0
-            st.session_state.alvos_sinal = []
-            return
-    if len(st.session_state.historico) >= 20:
-        res_ultimo = analisar_rodada_especifica(st.session_state.historico)
-        
-        if res_ultimo.get("score_num", 0) >= 4:
-            tiers, df_rank = obter_tiers_cache()
-            padrao = res_ultimo["padrao_nome"]
-            
-            posicao_rank = None
-            taxa_acerto = None
-            if not df_rank.empty and padrao in df_rank["Padrão"].values:
-                idx = df_rank[df_rank["Padrão"] == padrao].index[0]
-                posicao_rank = idx + 1
-                taxa_acerto = df_rank.loc[idx, "Taxa de Acerto (%)"]
-            
-            tier_do_padrao = "Fora dos Tiers"
-            if padrao in tiers.get("ELITE_TOP_3", []):
-                tier_do_padrao = "👑 Elite (Top 3)"
-            elif padrao in tiers.get("SELECAO_OURO_TOP_5", []):
-                tier_do_padrao = "🥇 Seleção Ouro (Top 5)"
-            elif padrao in tiers.get("SELECAO_TOP_10", []):
-                tier_do_padrao = "🥈 Seleção (Top 10)"
-            elif padrao in tiers.get("RADAR_TOP_30", []):
-                tier_do_padrao = "🥉 Radar (Top 30)"
-            
-            permitido = False
-            if filtro_hibrido_opcao == "Desativado (Usar apenas regras fixas)":
-                permitido = True
-            elif filtro_hibrido_opcao == "🥉 Radar (Top 30 - Permissivo)" and tier_do_padrao != "Fora dos Tiers":
-                permitido = True
-            elif filtro_hibrido_opcao == "🥈 Seleção (Top 10 - Equilibrado)" and tier_do_padrao in ["👑 Elite (Top 3)", "🥇 Seleção Ouro (Top 5)", "🥈 Seleção (Top 10)"]:
-                permitido = True
-            elif filtro_hibrido_opcao == "🥇 Seleção Ouro (Top 5 - Conservador)" and tier_do_padrao in ["👑 Elite (Top 3)", "🥇 Seleção Ouro (Top 5)"]:
-                permitido = True
-            elif filtro_hibrido_opcao == "👑 Elite (Top 3 - Máxima Precisão)" and tier_do_padrao == "👑 Elite (Top 3)":
-                permitido = True
-            
-            if st.session_state.sinal_ativo:
-                if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
-                    alvos_atuais = set(st.session_state.alvos_sinal)
-                    novos_alvos_unicos = set(res_ultimo["alvos"]) - alvos_atuais
-                    if novos_alvos_unicos and len(alvos_atuais) < 10:
-                        alvos_finais = list(alvos_atuais.union(novos_alvos_unicos))
-                        st.session_state.alvos_sinal = alvos_finais
-                        enviar_mensagem_telegram(
-                            f"🔄 *FUSÃO DE ALVOS (GALE)*\n"
-                            f"Novos alvos adicionados: `{list(novos_alvos_unicos)}`\n"
-                            f"Alvos Totais ({len(alvos_finais)}): `{alvos_finais}`"
-                        )
-            elif permitido:
-                st.session_state.sinal_ativo = True
-                st.session_state.alvos_sinal = list(dict.fromkeys(res_ultimo["alvos"]))
-                st.session_state.tentativa_atual = 0
-                enviar_alerta_telegram(
-                    res_ultimo["ultimo"],
-                    res_ultimo["score_num"],
-                    res_ultimo["alvos"],
-                    [f"Padrão: {padrao}", f"Filtro: {filtro_hibrido_opcao}"],
-                    tier_nome=tier_do_padrao,
-                    posicao_rank=posicao_rank,
-                    taxa_acerto=taxa_acerto,
-                    modo_estrategia=estrategia_telegram
-                )
-
-if modo_operacao == "On-line (Captura Automática)":
-    st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
-    novos_dados = buscar_dados_roleta_url(roleta_selecionada)
-    
-    if novos_dados and novos_dados != st.session_state.historico:
-        num_novo = novos_dados[0]
-        processar_novo_numero(num_novo)
-        st.session_state.historico = novos_dados
-else:
-    st.sidebar.warning(f"🟠 Modo Manual ativo: **{roleta_selecionada}**")
-    
-    with st.sidebar.form(key="form_entrada_manual", clear_on_submit=True):
-        novo_numero_input = st.number_input(
-            "Número Sorteado (Manual):", 
-            min_value=0, 
-            max_value=36, 
-            step=1,
-            value=None,
-            placeholder="Digite de 0 a 36 e tecle Enter"
-        )
-        submetido = st.form_submit_button("➕ Adicionar Número (Enter)")
-        
-        if submetido and novo_numero_input is not None:
-            num = int(novo_numero_input)
-            processar_novo_numero(num)
-            st.session_state.historico.insert(0, num)
-            st.rerun()
-    
-    if st.sidebar.button("🧹 Limpar Histórico"):
-        st.session_state.historico = []
-        st.session_state.sinal_ativo = False
-        st.session_state.alvos_sinal = []
-        st.session_state.tentativa_atual = 0
-        st.session_state.ultimo_resultado = None
-        st.session_state.rodadas_no_modo_atual = 15
-        for chave in ["tier_cache", "df_rank_cache", "tier_cache_tamanho"]:
-            if chave in st.session_state:
-                del st.session_state[chave]
-        st.rerun()
-
-st.subheader("Esteira Temporal (Últimas 13 Rodadas)")
-if st.session_state.historico:
-    esteira = st.session_state.historico[:13]
-    cols = st.columns(min(len(esteira), 13))
-    for i, num in enumerate(esteira):
-        with cols[i]:
-            rotulo = "Atual" if i == 0 else f"-{i}r"
-            st.metric(label=rotulo, value=num)
-
-if st.session_state.historico and len(st.session_state.historico) >= 2:
-    res_brk_painel = validar_gatilho_sequencial_brk(st.session_state.historico)
-    
-    if res_brk_painel["sinal_ativo"]:
-        st.markdown("---")
-        st.success(f"🎯 **GATILHO OCULTO BRK CONFIRMADO PARA O GRUPO {res_brk_painel['grupo_confirmado']}!**")
-        st.markdown(f"**Validação:** A dezena recente `{res_brk_painel['dezena_gatilho']}` confirmou a dezena anterior `{res_brk_painel['dezena_confirmada']}`.")
-        
-        c_prio, c_cob = st.columns(2)
-        with c_prio:
-            st.error(f"🔥 **PRIORIDADE MÁXIMA (Ainda não saíram nas 30 rodadas):**\n\n`{res_brk_painel['prioridade_maxima']}`")
-        with c_cob:
-            st.warning(f"🛡️ **COBERTURA (Já saíram no histórico):**\n\n`{res_brk_painel['cobertura']}`")
-        st.info("⏱️ **Estratégia Recomendada:** Manter apostas neste grupo pelas próximas **3 rodadas**.")
-
-if st.session_state.ultimo_resultado:
-    if "GREEN" in st.session_state.ultimo_resultado:
-        st.success(f"🎉 Resultado do Último Sinal: **{st.session_state.ultimo_resultado}**")
-    else:
-        st.error(f"⚠️ Resultado do Último Sinal: **{st.session_state.ultimo_resultado}**")
-
-# Tabela Analítica
 if st.session_state.historico:
     st.markdown("---")
     st.subheader(f"📊 Mapeamento Analítico - {roleta_selecionada}")
@@ -672,23 +487,25 @@ if st.session_state.historico:
     
     for idx in range(len(janela_exibicao)):
         sub_hist = st.session_state.historico[idx:]
-        res = analisar_rodada_especifica(sub_hist)
+        
+        # Garante que a função receba sub_hist válido
+        res = analisar_rodada_especifica(sub_hist) if 'analisar_rodada_especifica' in globals() else {}
         
         dados_tabela.append({
             "Posição": "Atual" if idx == 0 else f"-{idx}r",
-            "Último": res["ultimo"],
-            "Esquerda": res["esquerda"],
-            "Direita": res["direita"],
-            "Puxadores BRK": res["puxadores_brk"],
-            "Puxadores Dinâmico": res["puxadores_dinamico"],
-            "Vizinhos Físicos": res["vizinhos_str"],
-            "Camuflados": res["camuflados"],
-            "Racetrack": res["racetrack"],
-            "Inversão": res["inversao"],
-            "Reincidência": res["reincidencia"],
-            "Confirmações": res["confirmacoes"],
-            "Score": res["score"],
-            "Status / Sugestão": res["status"]
+            "Último": res.get("ultimo", "-"),
+            "Esquerda": res.get("esquerda", "-"),
+            "Direita": res.get("direita", "-"),
+            "Puxadores BRK": res.get("puxadores_brk", "-"),
+            "Puxadores Dinâmico": res.get("puxadores_dinamico", "-"),
+            "Vizinhos Físicos": res.get("vizinhos_str", "-"),
+            "Camuflados": res.get("camuflados", "-"),
+            "Racetrack": res.get("racetrack", "-"),
+            "Inversão": res.get("inversao", "-"),
+            "Reincidência": res.get("reincidencia", "-"),
+            "Confirmações": res.get("confirmacoes", "-"),
+            "Score": res.get("score", 0),
+            "Status / Sugestão": res.get("status", "-")
         })
     
     df_exibicao = pd.DataFrame(dados_tabela)
@@ -699,16 +516,17 @@ if st.session_state.historico:
 # ==========================================
 st.markdown("---")
 st.subheader("📈 Estatísticas — Últimas 200 Rodadas")
+
 if st.session_state.historico:
     ultimas = st.session_state.historico[:200]
     qtd = len(ultimas)
     c1, c2, c3 = st.columns(3)
+    
     with c1:
         st.markdown("### 🔥 Quentes / Frias")
         if qtd >= 10:
             cont = pd.Series(ultimas).value_counts().reindex(range(37), fill_value=0)
             
-            # 12 mais frequentes e 12 menos frequentes
             top_12_quentes = cont.sort_values(ascending=False).head(12)
             top_12_frias = cont.sort_values(ascending=True).head(12)
             
@@ -724,35 +542,33 @@ if st.session_state.historico:
                     st.markdown(f"<span style='font-size:18px; font-weight:bold; color:#6699ff;'>{num:2d}</span> &nbsp; <span style='color:#cccccc;'>({freq}x)</span>", unsafe_allow_html=True)
         else:
             st.info(f"Dados insuficientes ({qtd}/10)")
+
     with c2:
         st.markdown("### 📐 Dúzias / Colunas / Paridade")
-        if qtd >= 12:
+        if qtd >= 12 and 'calcular_estatisticas' in globals():
             est = calcular_estatisticas(ultimas)
             categorias = ['D1\n1-12', 'D2\n13-24', 'D3\n25-36', 'C1', 'C2', 'C3', 'Pares', 'Ímpares', 'Baixas\n1-18', 'Altas\n19-36']
             valores = [
-                est['d1'], est['d2'], est['d3'],
-                est['c1'], est['c2'], est['c3'],
-                est['par'], est['impar'],
-                est['baixas'], est['altas']
+                est.get('d1', 0), est.get('d2', 0), est.get('d3', 0),
+                est.get('c1', 0), est.get('c2', 0), est.get('c3', 0),
+                est.get('par', 0), est.get('impar', 0),
+                est.get('baixas', 0), est.get('altas', 0)
             ]
-            cores = ['#FF6B6B', '#4ECDC4', '#45B7D1',
-                     '#96CEB4', '#FFEAA7', '#DDA0DD',
-                     '#2ECC71', '#E74C3C', '#3498DB', '#E67E22']
+            cores = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#2ECC71', '#E74C3C', '#3498DB', '#E67E22']
+            
             fig_meta = go.Figure(go.Bar(
                 x=categorias, y=valores,
                 marker_color=cores, text=valores, textposition='auto'
             ))
-            fig_meta.update_layout(template="plotly_dark", height=300,
-                                  margin=dict(l=10, r=10, t=30, b=60), showlegend=False)
+            fig_meta.update_layout(template="plotly_dark", height=300, margin=dict(l=10, r=10, t=30, b=60), showlegend=False)
             st.plotly_chart(fig_meta, use_container_width=True)
         else:
             st.info(f"Dados insuficientes ({qtd}/12)")
             
     with c3:
         st.markdown("### 🧭 Setores da Roleta — Últimas 200 rodadas")
-        if qtd >= 10:
+        if qtd >= 10 and 'SETORES_ROLETA' in globals():
             amostra_setores = st.session_state.historico[:200]
-            
             contagem_setores = {}
             for nome, nums in SETORES_ROLETA.items():
                 contagem_setores[nome] = sum(1 for n in amostra_setores if n in nums)
@@ -784,8 +600,10 @@ if st.session_state.historico:
             """, unsafe_allow_html=True)
         else:
             st.info(f"Dados insuficientes ({qtd}/10)")
-    
-# === MAPA DE CALOR (LAYOUT RACETRACK / PISTA) ===
+
+# ==========================================
+# MAPA DE CALOR (LAYOUT RACETRACK / PISTA)
+# ==========================================
 st.markdown("---")
 st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro (Racetrack)")
 
@@ -796,7 +614,6 @@ if qtd >= 20:
     cont = pd.Series(ultimas_200).value_counts().reindex(range(37), fill_value=0)
     max_freq = max(cont.values) if max(cont.values) > 0 else 1
 
-    # Mapeamento do gradiente térmico
     def get_cor_calor(num):
         freq = cont[num]
         intensidade = freq / max_freq
@@ -809,61 +626,43 @@ if qtd >= 20:
         else:
             return f"rgba(80, 60, 20, {0.35 + intensidade*0.30})"
 
-    # Mapeamento das casas do Racetrack conforme imagem de referência
     topo = [
-        {"n": 5, "f": cont[5], "bg": get_cor_calor(5)},
-        {"n": 24, "f": cont[24], "bg": get_cor_calor(24)},
-        {"n": 16, "f": cont[16], "bg": get_cor_calor(16)},
-        {"n": 33, "f": cont[33], "bg": get_cor_calor(33)},
-        {"n": 1, "f": cont[1], "bg": get_cor_calor(1)},
-        {"n": 20, "f": cont[20], "bg": get_cor_calor(20)},
-        {"n": 14, "f": cont[14], "bg": get_cor_calor(14)},
-        {"n": 31, "f": cont[31], "bg": get_cor_calor(31)},
-        {"n": 9, "f": cont[9], "bg": get_cor_calor(9)},
-        {"n": 22, "f": cont[22], "bg": get_cor_calor(22)},
-        {"n": 18, "f": cont[18], "bg": get_cor_calor(18)},
-        {"n": 29, "f": cont[29], "bg": get_cor_calor(29)},
-        {"n": 7, "f": cont[7], "bg": get_cor_calor(7)},
-        {"n": 28, "f": cont[28], "bg": get_cor_calor(28)},
-        {"n": 12, "f": cont[12], "bg": get_cor_calor(12)},
-        {"n": 35, "f": cont[35], "bg": get_cor_calor(35)},
+        {"n": 5, "f": cont[5], "bg": get_cor_calor(5)}, {"n": 24, "f": cont[24], "bg": get_cor_calor(24)},
+        {"n": 16, "f": cont[16], "bg": get_cor_calor(16)}, {"n": 33, "f": cont[33], "bg": get_cor_calor(33)},
+        {"n": 1, "f": cont[1], "bg": get_cor_calor(1)}, {"n": 20, "f": cont[20], "bg": get_cor_calor(20)},
+        {"n": 14, "f": cont[14], "bg": get_cor_calor(14)}, {"n": 31, "f": cont[31], "bg": get_cor_calor(31)},
+        {"n": 9, "f": cont[9], "bg": get_cor_calor(9)}, {"n": 22, "f": cont[22], "bg": get_cor_calor(22)},
+        {"n": 18, "f": cont[18], "bg": get_cor_calor(18)}, {"n": 29, "f": cont[29], "bg": get_cor_calor(29)},
+        {"n": 7, "f": cont[7], "bg": get_cor_calor(7)}, {"n": 28, "f": cont[28], "bg": get_cor_calor(28)},
+        {"n": 12, "f": cont[12], "bg": get_cor_calor(12)}, {"n": 35, "f": cont[35], "bg": get_cor_calor(35)}
     ]
 
     base = [
-        {"n": 30, "f": cont[30], "bg": get_cor_calor(30)},
-        {"n": 11, "f": cont[11], "bg": get_cor_calor(11)},
-        {"n": 36, "f": cont[36], "bg": get_cor_calor(36)},
-        {"n": 13, "f": cont[13], "bg": get_cor_calor(13)},
-        {"n": 27, "f": cont[27], "bg": get_cor_calor(27)},
-        {"n": 6, "f": cont[6], "bg": get_cor_calor(6)},
-        {"n": 34, "f": cont[34], "bg": get_cor_calor(34)},
-        {"n": 17, "f": cont[17], "bg": get_cor_calor(17)},
-        {"n": 25, "f": cont[25], "bg": get_cor_calor(25)},
-        {"n": 2, "f": cont[2], "bg": get_cor_calor(2)},
-        {"n": 21, "f": cont[21], "bg": get_cor_calor(21)},
-        {"n": 4, "f": cont[4], "bg": get_cor_calor(4)},
-        {"n": 19, "f": cont[19], "bg": get_cor_calor(19)},
-        {"n": 15, "f": cont[15], "bg": get_cor_calor(15)},
-        {"n": 32, "f": cont[32], "bg": get_cor_calor(32)},
+        {"n": 30, "f": cont[30], "bg": get_cor_calor(30)}, {"n": 11, "f": cont[11], "bg": get_cor_calor(11)},
+        {"n": 36, "f": cont[36], "bg": get_cor_calor(36)}, {"n": 13, "f": cont[13], "bg": get_cor_calor(13)},
+        {"n": 27, "f": cont[27], "bg": get_cor_calor(27)}, {"n": 6, "f": cont[6], "bg": get_cor_calor(6)},
+        {"n": 34, "f": cont[34], "bg": get_cor_calor(34)}, {"n": 17, "f": cont[17], "bg": get_cor_calor(17)},
+        {"n": 25, "f": cont[25], "bg": get_cor_calor(25)}, {"n": 2, "f": cont[2], "bg": get_cor_calor(2)},
+        {"n": 21, "f": cont[21], "bg": get_cor_calor(21)}, {"n": 4, "f": cont[4], "bg": get_cor_calor(4)},
+        {"n": 19, "f": cont[19], "bg": get_cor_calor(19)}, {"n": 15, "f": cont[15], "bg": get_cor_calor(15)},
+        {"n": 32, "f": cont[32], "bg": get_cor_calor(32)}
     ]
 
     curva_esq = [
         {"n": 10, "f": cont[10], "bg": get_cor_calor(10)},
         {"n": 23, "f": cont[23], "bg": get_cor_calor(23)},
-        {"n": 8, "f": cont[8], "bg": get_cor_calor(8)},
+        {"n": 8, "f": cont[8], "bg": get_cor_calor(8)}
     ]
 
     curva_dir = [
         {"n": 3, "f": cont[3], "bg": get_cor_calor(3)},
         {"n": 26, "f": cont[26], "bg": get_cor_calor(26)},
-        {"n": 0, "f": cont[0], "bg": get_cor_calor(0)},
+        {"n": 0, "f": cont[0], "bg": get_cor_calor(0)}
     ]
 
-    # Construção prévia das células
     html_topo = "".join([f'<div class="cell" style="background:{i["bg"]};">{i["n"]}<span class="cell-sub">({i["f"]})</span></div>' for i in topo])
     html_base = "".join([f'<div class="cell" style="background:{i["bg"]};">{i["n"]}<span class="cell-sub">({i["f"]})</span></div>' for i in base])
 
-    # Template HTML/CSS limpo
     html_racetrack = f"""
     <style>
         .racetrack-container {{
@@ -936,7 +735,6 @@ if qtd >= 20:
 
     <div class="racetrack-container">
         <div class="racetrack-grid">
-            <!-- Curva Esquerda -->
             <div class="curva-col" style="grid-column: 1; grid-row: 1 / span 3;">
                 <div class="cell" style="background:{curva_esq[0]['bg']}; border-top-left-radius: 20px;">
                     {curva_esq[0]['n']}<span class="cell-sub">({curva_esq[0]['f']})</span>
@@ -949,10 +747,8 @@ if qtd >= 20:
                 </div>
             </div>
 
-            <!-- Linha Superior -->
             {html_topo}
 
-            <!-- Setores Centrais -->
             <div class="center-area">
                 <div class="sector-title">TIER</div>
                 <div class="sector-title">ORPHELINS</div>
@@ -960,10 +756,8 @@ if qtd >= 20:
                 <div class="sector-title">ZERO</div>
             </div>
 
-            <!-- Linha Inferior -->
             {html_base}
 
-            <!-- Curva Direita -->
             <div class="curva-col" style="grid-column: 18; grid-row: 1 / span 3;">
                 <div class="cell" style="background:{curva_dir[0]['bg']}; border-top-right-radius: 20px;">
                     {curva_dir[0]['n']}<span class="cell-sub">({curva_dir[0]['f']})</span>
@@ -990,16 +784,19 @@ else:
 st.markdown("---")
 st.subheader("🚨 Sinal Ativo & Acompanhamento")
 
-if st.session_state.sinal_ativo:
-    st.warning(f"⚠️ **SINAL EM ANDAMENTO — Tentativa {st.session_state.tentativa_atual + 1}/3**")
-    alvos_exibicao = [str(n) for n in st.session_state.alvos_sinal]
-    st.markdown(f"### 🎯 Alvos Sugeridos:")
+if st.session_state.get('sinal_ativo', False):
+    tentativa = st.session_state.get('tentativa_atual', 0)
+    st.warning(f"⚠️ **SINAL EM ANDAMENTO — Tentativa {tentativa + 1}/3**")
+    
+    alvos = st.session_state.get('alvos_sinal', [])
+    alvos_exibicao = [str(n) for n in alvos]
+    
+    st.markdown("### 🎯 Alvos Sugeridos:")
     st.markdown(f"## `{' | '.join(alvos_exibicao)}`")
     st.info("🛡️ Proteção recomendada: Apostar também no **0 (Zero)** para cobertura.")
 
-    # Barra de progresso do Gale
-    progresso = st.session_state.tentativa_atual / 3
-    st.progress(progresso, text=f"Rodada {st.session_state.tentativa_atual + 1} de 3 (Limite de Gales)")
+    progresso = (tentativa + 1) / 3
+    st.progress(min(progresso, 1.0), text=f"Rodada {tentativa + 1} de 3 (Limite de Gales)")
 
     dica_etapa = {
         0: "💰 Entrada — Valor Base",
@@ -1007,7 +804,7 @@ if st.session_state.sinal_ativo:
         2: "📊 Gale 2 — Aumentar ~100%",
         3: "🛑 Parar — Limite Atingido"
     }
-    st.info(f"💡 Sugestão de aposta: **{dica_etapa.get(st.session_state.tentativa_atual, 'Parar')}**")
+    st.info(f"💡 Sugestão de aposta: **{dica_etapa.get(tentativa, 'Parar')}**")
 
 else:
     st.success("✅ Nenhum sinal ativo — Aguardando padrão convergente...")
