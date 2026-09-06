@@ -862,6 +862,7 @@ if st.session_state.historico:
     # ------------------------------------------
     # COLUNA 3: MAPA DE CORES — ÚLTIMAS 100
     # ------------------------------------------
+
     with col_e3:
         st.markdown("### 🎨 Mapa de Cores — Últimas 100")
         
@@ -874,7 +875,6 @@ if st.session_state.historico:
                 return '#15803D' # Verde
             return '#B91C1C' if num in VERMELHOS else '#1F2937' # Vermelho / Preto
         
-        # Monta matriz 10x10 para exibição visual das últimas 100 rodadas
         grid_numeros = []
         grid_cores = []
         
@@ -888,20 +888,15 @@ if st.session_state.historico:
         z_dummy = [[1]*10 for _ in range(len(grid_numeros))]
         text_grid = [[str(n) if n is not None else "" for n in lin] for lin in grid_numeros]
         
-        # Mapeamento de cores customizado por célula
-        colorscale = []
-        flat_cores = [cor for sublist in grid_cores for cor in sublist]
-        
         fig_mapa = go.Figure(data=go.Heatmap(
             z=z_dummy,
             text=text_grid,
             texttemplate="%{text}",
-            textfont=dict(size=11, color="white"),
+            textfont=dict(size=12, color="white", family="Arial Black"),
             showscale=False,
             hoverinfo='none'
         ))
         
-        # Aplicação das cores reais nos blocos
         shapes = []
         for r_idx, row in enumerate(grid_cores):
             for c_idx, color in enumerate(row):
@@ -911,7 +906,8 @@ if st.session_state.historico:
                     x0=c_idx - 0.5, y0=r_idx - 0.5,
                     x1=c_idx + 0.5, y1=r_idx + 0.5,
                     fillcolor=color,
-                    line=dict(width=1, color="#111827")
+                    line=dict(width=1, color="#111827"),
+                    layer="below" # <-- Garante que o fundo colorido fique ATRÁS do texto
                 ))
                 
         fig_mapa.update_layout(
@@ -923,7 +919,7 @@ if st.session_state.historico:
             shapes=shapes
         )
         st.plotly_chart(fig_mapa, use_container_width=True)
-
+        
 # ==========================================
 # 🏆 RANKING DOS PADRÕES
 # ==========================================
