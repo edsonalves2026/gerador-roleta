@@ -573,41 +573,27 @@ if st.session_state.historico:
         else:
             st.info(f"Dados insuficientes ({qtd}/12)")
             
-    with c3:
-        st.markdown("### 🧭 Setores da Roleta — Últimas 80 rodadas")
-        if qtd >= 10 and 'SETORES_ROLETA' in globals():
-            amostra_setores = st.session_state.historico[:80]
-            contagem_setores = {}
-            for nome, nums in SETORES_ROLETA.items():
-                contagem_setores[nome] = sum(1 for n in amostra_setores if n in nums)
-            
-            nomes_exibicao = {
-                "VOISINS_DU_ZERO": "Vizinhos do Zero",
-                "TIERS_DU_CYLINDRE": "Terços do Cilindro",
-                "ORPHELINS": "Órfãos",
-                "ZERO_SPIEL": "Zero Spiel"
-            }
-            
-            dados_setores = []
-            for chave, valor in contagem_setores.items():
-                nome_legivel = nomes_exibicao.get(chave, chave)
-                pct = round(valor / len(amostra_setores) * 100, 1)
-                dados_setores.append({"Setor": nome_legivel, "Quantidade": valor, "%": pct})
-            
-            df_setores = pd.DataFrame(dados_setores)
-            st.dataframe(df_setores, use_container_width=True, hide_index=True)
-            
-            st.markdown("##### 🎯 Divisão dos Setores")
-            st.markdown("""
-            <div style='background-color:#1a1a1a; padding:10px; border-radius:8px; text-align:center;'>
-                <span style='background-color:#cc4444; padding:6px 12px; border-radius:4px; margin:3px;'>TERÇOS</span>
-                <span style='background-color:#4488cc; padding:6px 12px; border-radius:4px; margin:3px;'>ÓRFÃOS</span>
-                <span style='background-color:#cc8844; padding:6px 12px; border-radius:4px; margin:3px;'>VIZINHOS DO ZERO</span>
-                <span style='background-color:#44aa66; padding:6px 12px; border-radius:4px; margin:3px;'>ZERO SPIEL</span>
-            </div>
-            """, unsafe_allow_html=True)
+   with c3:
+        st.markdown("### 🎨 Mapa de Cores — Últimas 100")
+        if qtd > 0:
+            linhas_html = []
+            amostra_mapa = ultimas[:100]
+            for i in range(0, len(amostra_mapa), 10):
+                bloco = amostra_mapa[i:i+10]
+                html_bloco = "<div style='display:flex;gap:4px;margin:3px 0;'>"
+                for n in bloco:
+                    if n == 0:
+                        bg_cor = "#00AA00"
+                    elif n in NUMEROS_VERMELHOS:
+                        bg_cor = "#FF2222"
+                    else:
+                        bg_cor = "#000000"
+                    html_bloco += f"<span style='background-color:{bg_cor};color:#FFF;border-radius:4px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;'>{n}</span>"
+                html_bloco += "</div>"
+                linhas_html.append(html_bloco)
+            st.markdown("".join(linhas_html), unsafe_allow_html=True)
         else:
-            st.info(f"Dados insuficientes ({qtd}/10)")
+            st.info("Aguardando dados...")
             
 # ==========================================
 # MAPA DE CALOR (LAYOUT RACETRACK / PISTA)
