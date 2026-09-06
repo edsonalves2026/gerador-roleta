@@ -193,13 +193,19 @@ def buscar_dados_roleta_url(roleta_nome):
 
 def enviar_mensagem_telegram(mensagem):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        st.sidebar.error("❌ Telegram Não Configurado nos Secrets!")
         return False, "Token ou Chat ID não configurados nos Secrets."
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensagem, "parse_mode": "Markdown"}
     try:
         res = requests.post(url, json=payload, timeout=5)
-        return (True, "Enviado com sucesso!") if res.status_code == 200 else (False, res.text)
+        if res.status_code == 200:
+            return True, "Enviado com sucesso!"
+        else:
+            st.sidebar.error(f"Erro Telegram API: {res.status_code} - {res.text}")
+            return False, res.text
     except Exception as e:
+        st.sidebar.error(f"Exceção Telegram: {e}")
         return False, str(e)
 
 def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes, tier_nome="", posicao_rank=None, taxa_acerto=None, modo_estrategia=""):
@@ -207,25 +213,29 @@ def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes, tier_nome="", pos
     prefixo_tier = f"🏆 Classificação: {tier_nome}\n" if tier_nome else ""
     str_rank = f"📊 Posição no Ranking: #{posicao_rank}º lugar ({taxa_acerto}% de assertividade)\n" if posicao_rank else ""
     str_estrategia = f"⚙️ Estratégia: {modo_estrategia}\n" if modo_estrategia else ""
+    
+    # Sanitiza Markdown para evitar erro 400 da API
+    str_estrategia = str_estrategia.replace("_", "\\_")
+    
     mensagem = (
-        f"🚨 SINAL CONFIRMADO - RADAR DE ROLETA\n\n"
+        f"🚨 *SINAL CONFIRMADO - RADAR DE ROLETA*\n\n"
         f"{prefixo_tier}"
         f"{str_rank}"
         f"{str_estrategia}"
-        f"📌 Último Número: {ultimo_num}\n"
-        f"📊 Score de Assertividade: {score}/5\n"
-        f"🎯 Alvos Sugeridos: {alvos}\n"
-        f"🛡️ Proteção: 0 (Zero)\n\n"
+        f"📌 Último Número: *{ultimo_num}*\n"
+        f"📊 Score de Assertividade: *{score}/5*\n"
+        f"🎯 Alvos Sugeridos: *{alvos}*\n"
+        f"🛡️ Proteção: *0 (Zero)*\n\n"
         f"🔍 Filtros Convergentes:\n{texto_detalhes}\n\n"
-        f"⚠️ Entrada recomendada: Manter aposta por até 3 a 4 rodadas."
+        f"⚠️ *Entrada recomendada: Manter aposta por até 3 a 4 rodadas.*"
     )
     return enviar_mensagem_telegram(mensagem)
 
 def enviar_resultado_telegram(tipo, numero, etapa=""):
     if tipo == "GREEN":
-        msg = f"✅ GREEN CONFIRMADO! 🎉\n\n🎯 Número Bateu: {numero}\n📍 Momento: {etapa}"
+        msg = f"✅ *GREEN CONFIRMADO!* 🎉\n\n🎯 Número Bateu: *{numero}*\n📍 Momento: *{etapa}*"
     else:
-        msg = f"❌ RED / LOSS 😔\n\n📌 Último Sorteado: {numero}\n⚠️ Limite de Gales atingido."
+        msg = f"❌ *RED / LOSS* 😔\n\n📌 Último Sorteado: *{numero}*\n⚠️ Limite de Gales atingido."
     return enviar_mensagem_telegram(msg)
 
 # ==========================================
@@ -540,6 +550,7 @@ modo_gale_opcao = st.sidebar.radio(
 st.sidebar.markdown("---")
 
 def processar_novo_numero(num_novo):
+    # 1. Processa se já existia um sinal ativo aguardando resultado
     if st.session_state.sinal_ativo:
         st.session_state.tentativa_atual += 1
         etapas = {1: "Entrada Direta", 2: "Gale 1 (G1)", 3: "Gale 2 (G2)"}
@@ -561,11 +572,14 @@ def processar_novo_numero(num_novo):
             st.session_state.alvos_sinal = []
             return
 
-    if len(st.session_state.historico) >= 20:
-        historico_analise = list(reversed(st.session_state.historico))
+    # 2. Avalia histórico + novo número recebido para novos disparos de sinal
+    novo_historico_temp = [num_novo] + st.session_state.historico
+    if len(novo_historico_temp) >= 10:
+        historico_analise = list(reversed(novo_historico_temp))
         res_ultimo = analisar_rodada_especifica(historico_analise)
+        
         if res_ultimo["score_num"] >= 4:
-            tiers, df_rank = obter_tiers_cache()
+            tiers, df_rank = classificar_padroes_200_rodadas(novo_historico_temp)
             padrao = res_ultimo["padrao_nome"]
             posicao_rank = None
             taxa_acerto = None
@@ -603,7 +617,7 @@ def processar_novo_numero(num_novo):
                     if alvos_novos and len(st.session_state.alvos_sinal) < 10:
                         st.session_state.alvos_sinal.extend(alvos_novos)
                         enviar_mensagem_telegram(
-                            f"🔄 FUSÃO DE ALVOS (GALE)\n"
+                            f"🔄 *FUSÃO DE ALVOS (GALE)*\n"
                             f"Novos alvos adicionados: {alvos_novos}\n"
                             f"Alvos Totais: {st.session_state.alvos_sinal}"
                         )
@@ -629,6 +643,7 @@ if modo_operacao == "On-line (Captura Automática)":
         num_novo = novos_dados[0]
         processar_novo_numero(num_novo)
         st.session_state.historico = novos_dados
+        st.rerun()
 else:
     st.sidebar.warning(f"🟠 Modo Manual ativo: {roleta_selecionada}")
     with st.sidebar.form(key="form_entrada_manual", clear_on_submit=True):
@@ -721,74 +736,74 @@ if st.session_state.historico:
 st.markdown("---")
 st.subheader("📈 Estatísticas — Últimas 200 Rodadas")
 if st.session_state.historico:
-    ultimas = st.session_state.historico[:200]
-    qtd = len(ultimas)
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown("### 🔥 Quentes / Frias")
-        if qtd >= 10:
-            cont = pd.Series(ultimas).value_counts().reindex(range(37), fill_value=0)
-            quentes = cont.sort_values(ascending=False).head(12)
-            frias = cont.sort_values(ascending=True).head(12)
-            fig = go.Figure([
-                go.Bar(name='Mais Sorteados', x=quentes.index, y=quentes.values, marker_color='#FF4444'),
-                go.Bar(name='Menos Sorteados', x=frias.index, y=frias.values, marker_color='#4488FF')
-            ])
-            fig.update_layout(
-                template="plotly_dark",
-                barmode='group',
-                height=300,
-                margin=dict(l=10, r=10, t=30, b=10),
-                showlegend=True
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info(f"Dados insuficientes ({qtd}/10)")
-    with c2:
-        st.markdown("### 📐 Dúzias / Colunas / Paridade")
-        if qtd >= 12:
-            est = calcular_estatisticas(ultimas)
-            categorias = ['D1\n1-12', 'D2\n13-24', 'D3\n25-36', 'C1', 'C2', 'C3', 'Pares', 'Ímpares', 'Baixas\n1-18', 'Altas\n19-36']
-            valores = [
-                est.get('d1', 0), est.get('d2', 0), est.get('d3', 0),
-                est.get('c1', 0), est.get('c2', 0), est.get('c3', 0),
-                est.get('par', 0), est.get('impar', 0),
-                est.get('baixas', 0), est.get('altas', 0)
-            ]
-            cores = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#2ECC71', '#E74C3C', '#3498DB', '#E67E22']
-            fig2 = go.Figure(data=[go.Bar(x=categorias, y=valores, marker_color=cores)])
-            fig2.update_layout(
-                template="plotly_dark",
-                height=300,
-                margin=dict(l=10, r=10, t=30, b=60),
-                showlegend=False
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-        else:
-            st.info(f"Dados insuficientes ({qtd}/12)")
-    with c3:
-        st.markdown("### 🎨 Mapa de Cores — Últimas 100")
-        if qtd > 0:
-            linhas_html = []
-            amostra_mapa = ultimas[:100]
-            for i in range(0, len(amostra_mapa), 10):
-                bloco = amostra_mapa[i:i+10]
-                html_bloco = "<div style='display:flex;gap:4px;margin:3px 0;'>"
-                for n in bloco:
-                    if n == 0:
-                        bg_cor = "#00AA00"
-                    elif n in NUMEROS_VERMELHOS:
-                        bg_cor = "#FF2222"
-                    else:
-                        bg_cor = "#000000"
-                    html_bloco += f"<div style='background-color:{bg_cor};color:white;padding:4px 8px;border-radius:3px;font-weight:bold;min-width:24px;text-align:center;'>{n}</div>"
-                html_bloco += "</div>"
-                linhas_html.append(html_bloco)
-            st.markdown("".join(linhas_html), unsafe_allow_html=True)
-        else:
-            st.info("Aguardando dados...")
+    ultimas = st.session_state.historico[:200]
+    qtd = len(ultimas)
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown("### 🔥 Quentes / Frias")
+        if qtd >= 10:
+            cont = pd.Series(ultimas).value_counts().reindex(range(37), fill_value=0)
+            quentes = cont.sort_values(ascending=False).head(12)
+            frias = cont.sort_values(ascending=True).head(12)
+            fig = go.Figure([
+                go.Bar(name='Mais Sorteados', x=quentes.index, y=quentes.values, marker_color='#FF4444'),
+                go.Bar(name='Menos Sorteados', x=frias.index, y=frias.values, marker_color='#4488FF')
+            ])
+            fig.update_layout(
+                template="plotly_dark",
+                barmode='group',
+                height=300,
+                margin=dict(l=10, r=10, t=30, b=10),
+                showlegend=True
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info(f"Dados insuficientes ({qtd}/10)")
+    with c2:
+        st.markdown("### 📐 Dúzias / Colunas / Paridade")
+        if qtd >= 12:
+            est = calcular_estatisticas(ultimas)
+            categorias = ['D1\n1-12', 'D2\n13-24', 'D3\n25-36', 'C1', 'C2', 'C3', 'Pares', 'Ímpares', 'Baixas\n1-18', 'Altas\n19-36']
+            valores = [
+                est.get('d1', 0), est.get('d2', 0), est.get('d3', 0),
+                est.get('c1', 0), est.get('c2', 0), est.get('c3', 0),
+                est.get('par', 0), est.get('impar', 0),
+                est.get('baixas', 0), est.get('altas', 0)
+            ]
+            cores = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#2ECC71', '#E74C3C', '#3498DB', '#E67E22']
+            fig2 = go.Figure(data=[go.Bar(x=categorias, y=valores, marker_color=cores)])
+            fig2.update_layout(
+                template="plotly_dark",
+                height=300,
+                margin=dict(l=10, r=10, t=30, b=60),
+                showlegend=False
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            st.info(f"Dados insuficientes ({qtd}/12)")
+    with c3:
+        st.markdown("### 🎨 Mapa de Cores — Últimas 100")
+        if qtd > 0:
+            linhas_html = []
+            amostra_mapa = ultimas[:100]
+            for i in range(0, len(amostra_mapa), 10):
+                bloco = amostra_mapa[i:i+10]
+                html_bloco = "<div style='display:flex;gap:4px;margin:3px 0;'>"
+                for n in bloco:
+                    if n == 0:
+                        bg_cor = "#00AA00"
+                    elif n in NUMEROS_VERMELHOS:
+                        bg_cor = "#FF2222"
+                    else:
+                        bg_cor = "#000000"
+                    html_bloco += f"<div style='background-color:{bg_cor};color:white;padding:4px 8px;border-radius:3px;font-weight:bold;min-width:24px;text-align:center;'>{n}</div>"
+                html_bloco += "</div>"
+                linhas_html.append(html_bloco)
+            st.markdown("".join(linhas_html), unsafe_allow_html=True)
+        else:
+            st.info("Aguardando dados...")
 else:
-    st.info("Aguardando histórico suficiente...")
+    st.info("Aguardando histórico suficiente...")
 
 # ==========================================
 # 10. RANKING DOS PADRÕES
@@ -797,72 +812,72 @@ st.markdown("---")
 st.subheader("🏆 Ranking de Padrões — Taxa de Acerto Histórica")
 tiers, df_rank = obter_tiers_cache()
 if not df_rank.empty and len(df_rank) >= 1:
-    st.dataframe(
-        df_rank,
-        column_config={
-            "Padrão": st.column_config.TextColumn("Padrão Detectado"),
-            "Total": st.column_config.NumberColumn("Sinais Emitidos", width="small"),
-            "Acertos": st.column_config.NumberColumn("Acertos ✅", width="small"),
-            "Taxa de Acerto (%)": st.column_config.ProgressColumn(
-                "Taxa de Acerto",
-                format="%.1f%%",
-                min_value=0,
-                max_value=100
-            )
-        },
-        use_container_width=True,
-        hide_index=True,
-        height=400
-    )
-    st.markdown("### 📹 Faixas de Classificação")
-    e1, e2, e3, e4 = st.columns(4)
-    e1.info(f"👑 ELITE (Top 3): {', '.join(tiers.get('ELITE_TOP_3', ['—']))}")
-    e2.success(f"🥇 OURO (Top 5): {', '.join(tiers.get('SELECAO_OURO_TOP_5', ['—']))}")
-    e3.info(f"🥈 SELEÇÃO (Top 10): {len(tiers.get('SELECAO_TOP_10', []))} padrões")
-    e4.info(f"🥉 RADAR (Top 30): {len(tiers.get('RADAR_TOP_30', []))} padrões")
-    st.caption("ℹ️ Ranking atualizado conforme histórico cresce. Mínimo de 20 rodadas para cálculo.")
+    st.dataframe(
+        df_rank,
+        column_config={
+            "Padrão": st.column_config.TextColumn("Padrão Detectado"),
+            "Total": st.column_config.NumberColumn("Sinais Emitidos", width="small"),
+            "Acertos": st.column_config.NumberColumn("Acertos ✅", width="small"),
+            "Taxa de Acerto (%)": st.column_config.ProgressColumn(
+                "Taxa de Acerto",
+                format="%.1f%%",
+                min_value=0,
+                max_value=100
+            )
+        },
+        use_container_width=True,
+        hide_index=True,
+        height=400
+    )
+    st.markdown("### 📹 Faixas de Classificação")
+    e1, e2, e3, e4 = st.columns(4)
+    e1.info(f"👑 ELITE (Top 3): {', '.join(tiers.get('ELITE_TOP_3', ['—']))}")
+    e2.success(f"🥇 OURO (Top 5): {', '.join(tiers.get('SELECAO_OURO_TOP_5', ['—']))}")
+    e3.info(f"🥈 SELEÇÃO (Top 10): {len(tiers.get('SELECAO_TOP_10', []))} padrões")
+    e4.info(f"🥉 RADAR (Top 30): {len(tiers.get('RADAR_TOP_30', []))} padrões")
+    st.caption("ℹ️ Ranking atualizado conforme histórico cresce. Mínimo de 20 rodadas para cálculo.")
 else:
-    st.info("📊 Dados insuficientes para gerar ranking.\n\n⏳ São necessárias pelo menos 20 rodadas no histórico para calcular a taxa de acerto dos padrões.")
+    st.info("📊 Dados insuficientes para gerar ranking.\n\n⏳ São necessárias pelo menos 20 rodadas no histórico para calcular a taxa de acerto dos padrões.")
 
 # ==========================================
 # 11. MANUAL E REGRAS
 # ==========================================
 st.markdown("---")
 with st.expander("📖 Manual Completo do Sistema — Regras e Funcionamento", expanded=False):
-    st.markdown("""
-    ### 🎯 Sistema TIRO CERTO + HEAD-SHOT
-    Objetivo: Identificar padrões estatísticos com convergência de critérios e sugerir números com maior probabilidade de sair.
+    st.markdown("""
+    ### 🎯 Sistema TIRO CERTO + HEAD-SHOT
+    Objetivo: Identificar padrões estatísticos com convergência de critérios e sugerir números com maior probabilidade de sair.
 
-    ### 📐 Critérios de Pontuação
-    * **Número ausente no grupo BRK:** +3.0
-    * **Primeiro puxador mais frequente:** +2.5
-    * **Segundo puxador:** +1.5
-    * **Número invertido:** +1.5
-    * **Vizinhos imediatos (esq/dir):** +1.0 cada
-    * **Número quente (últimos 100):** +1.0
-    * **Número da posição 13:** +1.0
-    * **Convergência de múltiplos critérios:** +2.0 por critério extra
+    ### 📐 Critérios de Pontuação
+    * **Número ausente no grupo BRK:** +3.0
+    * **Primeiro puxador mais frequente:** +2.5
+    * **Segundo puxador:** +1.5
+    * **Número invertido:** +1.5
+    * **Vizinhos imediatos (esq/dir):** +1.0 cada
+    * **Número quente (últimos 100):** +1.0
+    * **Número da posição 13:** +1.0
+    * **Convergência de múltiplos critérios:** +2.0 por critério extra
 
-    *Limiares de disparo:*
-    * Score ≥ 3.0 + mínimo 4 alvos → 🎯 **TIRO CERTO**
-    * Score ≥ 7.5 + maturação + não saiu nas últimas 5 → 💥 **HEAD-SHOT**
+    *Limiares de disparo:*
+    * Score ≥ 3.0 + mínimo 4 alvos → 🎯 **TIRO CERTO**
+    * Score ≥ 7.5 + maturação + não saiu nas últimas 5 → 💥 **HEAD-SHOT**
 
-    ### 🟢 Regras de Acerto e Gale
-    * ✅ **Acertou** → GREEN (sinal encerrado)
-    * ❌ **Errou** → avança para Gale 1 (G1)
-    * ❌ **Errou de novo** → avança para Gale 2 (G2)
-    * ❌ **3 erros seguidos** → LOSS (sinal encerrado)
-    * *O número 0 sempre conta como acerto.*
+    ### 🟢 Regras de Acerto e Gale
+    * ✅ **Acertou** → GREEN (sinal encerrado)
+    * ❌ **Errou** → avança para Gale 1 (G1)
+    * ❌ **Errou de novo** → avança para Gale 2 (G2)
+    * ❌ **3 erros seguidos** → LOSS (sinal encerrado)
+    * *O número 0 sempre conta como acerto.*
 
-    ### 🎛️ Níveis de Filtro
-    * **Desativado:** Emite todos os sinais detectados
-    * 🥉 **Radar:** Top 30 padrões com maior taxa de acerto
-    * 🥈 **Seleção:** Top 10 padrões
-    * 🥇 **Ouro:** Top 5 padrões
-    * 👑 **Elite:** Apenas Top 3 padrões (maior precisão)
+    ### 🎛️ Níveis de Filtro
+    * **Desativado:** Emite todos os sinais detectados
+    * 🥉 **Radar:** Top 30 padrões com maior taxa de acerto
+    * 🥈 **Seleção:** Top 10 padrões
+    * 🥇 **Ouro:** Top 5 padrões
+    * 👑 **Elite:** Apenas Top 3 padrões (maior precisão)
 
-    ### ⚙️ Requisição API
-    * Atualização automática a cada 5 segundos.
-    * Timeout de proteção: 10 segundos por requisição.
-    * Limite de histórico carregado: 1000 rodadas.
-    """)
+    ### ⚙️ Requisição API
+    * Atualização automática a cada 5 segundos.
+    * Timeout de proteção: 10 segundos por requisição.
+    * Limite de histórico carregado: 1000 rodadas.
+    """)
