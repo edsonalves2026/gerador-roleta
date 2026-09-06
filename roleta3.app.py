@@ -106,21 +106,22 @@ def calcular_estatisticas(amostra):
 def buscar_puxadores_dinamicos(numero_alvo, historico):
     if len(historico) < 2:
         return []
-    subsequentes = [historico[i+1] for i in range(len(historico)-1) if historico[i] == numero_alvo]
+    # No histórico ordenado do mais recente ao mais antigo:
+    # Se historico[i] == numero_alvo, o número que veio depois foi historico[i-1]
+    subsequentes = [historico[i-1] for i in range(1, len(historico)) if historico[i] == numero_alvo]
     if not subsequentes:
         return []
     return pd.Series(subsequentes).value_counts().head(4).index.tolist()
 
-# ✅ NOVA FUNÇÃO: Scores calculados dinamicamente pelo histórico
 def calcular_scores_reais(historico, limite=30):
     if len(historico) < limite:
         return 50.0, 50.0, 0.0, 0.0
     amostra = historico[:limite]
     acertos_din = acertos_brk = tiros_din = tiros_brk = 0
-    for i in range(1, len(amostra)):
-        ultimo = amostra[i]
-        proximo = amostra[i-1]
-        pux_din = buscar_puxadores_dinamicos(ultimo, amostra[i:])
+    for i in range(len(amostra) - 1):
+        ultimo = amostra[i+1]
+        proximo = amostra[i]
+        pux_din = buscar_puxadores_dinamicos(ultimo, amostra[i+1:])
         if pux_din:
             tiros_din += 1
             if proximo in pux_din[:4]:
@@ -259,15 +260,18 @@ def obter_camuflados(numero):
     return CAMUFLADOS_BASE.get(soma, [])
 
 def checar_estrategia_fantasma(historico):
-    if len(historico) >= 3 and all(n in GRUPO_FANTASMA for n in historico[-3:]):
+    # Verifica os 3 mais recentes (índices 0, 1 e 2)
+    if len(historico) >= 3 and all(n in GRUPO_FANTASMA for n in historico[:3]):
         return {"status": "ATIVADO", "principais": [9, 19, 27]}
     return {"status": "INATIVO"}
 
 def validar_gatilho_sequencial_brk(historico_200):
     if not historico_200 or len(historico_200) < 2:
         return {"sinal_ativo": False, "motivo": "Aguardando mais rodadas."}
-    dezena_atual = historico_200[-1]
-    dezena_anterior = historico_200[-2]
+    
+    dezena_atual = historico_200[0]
+    dezena_anterior = historico_200[1]
+    
     if dezena_atual == 0:
         soma, diferenca = 10, 10
     else:
@@ -275,13 +279,17 @@ def validar_gatilho_sequencial_brk(historico_200):
         soma = d1 + d2
         diferenca = abs(d2 - d1)
         soma = (soma // 10) + (soma % 10) if soma > 10 else soma
+    
     grupo_confirmado = soma if soma == dezena_anterior else (diferenca if diferenca == dezena_anterior else None)
     if grupo_confirmado is None or grupo_confirmado not in TABELA_OCULTOS_BRK:
         return {"sinal_ativo": False, "motivo": f"Dígitos de {dezena_atual} não confirmam {dezena_anterior}."}
+    
     grupo_completo = TABELA_OCULTOS_BRK[grupo_confirmado]
-    amostra_200 = historico_200[-200:]
-    dezenas_prioritarias = [num for num in grupo_completo if num not in amostra_200]
-    dezenas_cobertura = sorted([num for num in grupo_completo if num in amostra_200], key=lambda x: amostra_200.index(x))
+    amostra_200 = historico_200[:200]
+    
+    dezenas_prioritarias = [num for num in grupo_completo if num not in amostra_200[:30]]
+    dezenas_cobertura = [num for num in grupo_completo if num in amostra_200[:30]]
+    
     return {
         "sinal_ativo": True, "grupo_confirmado": grupo_confirmado,
         "dezena_gatilho": dezena_atual, "dezena_confirmada": dezena_anterior,
@@ -294,11 +302,11 @@ def classificar_padroes_200_rodadas(historico_completo):
     if len(amostra_200) < 20:
         return {}, pd.DataFrame()
     registros = []
-    for idx in range(10, len(amostra_200) - 2):
+    for idx in range(len(amostra_200) - 10, 2, -1):
         sub_hist = amostra_200[idx:]
         res = analisar_rodada_especifica(sub_hist)
-        if res["score_num"] >= 4:
-            futuro = amostra_200[:idx][-3:]
+        if res.get("score_num", 0) >= 4:
+            futuro = amostra_200[max(0, idx-3):idx]
             alvos_zero = set(res["alvos"] + [0])
             hit = any(n in alvos_zero for n in futuro)
             registros.append({"Padrão": res["padrao_nome"], "Total de Sinais": 1, "Acertos": 1 if hit else 0})
@@ -327,14 +335,16 @@ def obter_tiers_cache():
 def analisar_rodada_especifica(sub_historico, houve_troca=False):
     if not sub_historico:
         return {}
-    ultimo = sub_historico[-1]
+    ultimo = sub_historico[0]
     score = 0
     alvos = set()
     filtros_ativos = []
+    
     puxadores_brk = TABELA_PUXADORES_FIXA_BRK.get(ultimo, [])
     puxadores_dinamico = buscar_puxadores_dinamicos(ultimo, sub_historico)
     modo_atual = st.session_state.get("modo_operacional_atual", "DINAMICO")
     puxadores_ativos = puxadores_dinamico if modo_atual == "DINAMICO" and puxadores_dinamico else puxadores_brk
+    
     res_brk = validar_gatilho_sequencial_brk(sub_historico)
     if res_brk["sinal_ativo"]:
         score += 1
@@ -344,33 +354,39 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
         score += 1
         filtros_ativos.append("Puxadores")
         alvos.update(puxadores_ativos)
+    
     vizinhos = obter_vizinhos_mesa(ultimo)
     score += 1
     filtros_ativos.append("Vizinhos")
     alvos.update([vizinhos["esq_1"], vizinhos["dir_1"]])
+    
     invertido = obter_dezena_invertida(ultimo)
     str_inversao = f"{ultimo}➔{invertido}" if invertido is not None else "-"
     if invertido is not None:
         score += 1
         filtros_ativos.append("Inversão")
         alvos.add(invertido)
+        
     fantasma = checar_estrategia_fantasma(sub_historico)
     if fantasma["status"] == "ATIVADO":
         score += 1
         filtros_ativos.append("Fantasma")
         alvos.update(fantasma["principais"])
+        
     if houve_troca and ultimo in [1, 5, 8, 11, 14, 23, 26, 32]:
         score += 1
         filtros_ativos.append("VizinhosZero")
         alvos.update([0, 10, 20, 30])
-    esteira_14 = sub_historico[-14:]
-    reincidencia = [num for num in alvos if num in esteira_14[-3:]]
+        
+    esteira_14 = sub_historico[:14]
+    reincidencia = [num for num in alvos if num in esteira_14[:3]]
     if reincidencia:
         score += 1
         filtros_ativos.append("Reincidência")
+        
     setor_dom = "-"
     if len(sub_historico) >= 10:
-        foco_10 = sub_historico[-10:]
+        foco_10 = sub_historico[:10]
         contagem = {s: 0 for s in SETORES_ROLETA}
         for num in foco_10:
             for s, nums in SETORES_ROLETA.items():
@@ -380,8 +396,16 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
         if any(num in SETORES_ROLETA[setor_dom] for num in alvos):
             score += 1
             filtros_ativos.append("Racetrack")
+            
     score_final = min(score, 5)
-    alvos_ordenados = (res_brk["prioridade_maxima"] + [n for n in sorted(alvos) if n not in res_brk["prioridade_maxima"]]) if res_brk["sinal_ativo"] else sorted(alvos)
+    
+    if res_brk["sinal_ativo"]:
+        prio = res_brk["prioridade_maxima"]
+        resto = [n for n in sorted(alvos) if n not in prio]
+        alvos_ordenados = prio + resto
+    else:
+        alvos_ordenados = sorted(list(alvos))
+        
     padrao_nome = " + ".join(filtros_ativos) if filtros_ativos else "Geral"
     return {
         "ultimo": ultimo, "esquerda": f"{vizinhos['esq_2']} | {vizinhos['esq_1']}",
@@ -415,7 +439,6 @@ if "rodadas_no_modo_atual" not in st.session_state:
 # ==========================================
 # 7. MÁQUINA DE ESTADOS & MODO ATIVO
 # ==========================================
-# ✅ Scores agora calculados dinamicamente
 score_dinamico, score_brk, seco_dinamico, seco_brk = calcular_scores_reais(st.session_state.historico, limite=30)
 
 modo_ativo, status_motivo = determinar_modo_operacional(
@@ -485,7 +508,7 @@ def processar_novo_numero(num_novo):
         etapas = {1: "Entrada Direta", 2: "Gale 1 (G1)", 3: "Gale 2 (G2)"}
         etapa_nome = etapas.get(st.session_state.tentativa_atual, f"Gale {st.session_state.tentativa_atual - 1}")
         
-        alvos_com_zero = set(st.session_state.alvos_sinal + [0])
+        alvos_com_zero = set(st.session_state.alvos_sinal).union({0})
         if num_novo in alvos_com_zero:
             st.session_state.ultimo_resultado = f"GREEN ✅ ({etapa_nome})"
             enviar_resultado_telegram("GREEN", num_novo, etapa_nome)
@@ -500,10 +523,11 @@ def processar_novo_numero(num_novo):
             st.session_state.tentativa_atual = 0
             st.session_state.alvos_sinal = []
             return
+
     if len(st.session_state.historico) >= 20:
         res_ultimo = analisar_rodada_especifica(st.session_state.historico)
         
-        if res_ultimo["score_num"] >= 4:
+        if res_ultimo.get("score_num", 0) >= 4:
             tiers, df_rank = obter_tiers_cache()
             padrao = res_ultimo["padrao_nome"]
             
@@ -538,17 +562,19 @@ def processar_novo_numero(num_novo):
             
             if st.session_state.sinal_ativo:
                 if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
-                    alvos_novos = [n for n in res_ultimo["alvos"] if n not in st.session_state.alvos_sinal]
-                    if alvos_novos and len(st.session_state.alvos_sinal) < 10:
-                        st.session_state.alvos_sinal.extend(alvos_novos)
+                    alvos_atuais = set(st.session_state.alvos_sinal)
+                    novos_alvos_unicos = set(res_ultimo["alvos"]) - alvos_atuais
+                    if novos_alvos_unicos and len(alvos_atuais) < 10:
+                        alvos_finais = list(alvos_atuais.union(novos_alvos_unicos))
+                        st.session_state.alvos_sinal = alvos_finais
                         enviar_mensagem_telegram(
                             f"🔄 *FUSÃO DE ALVOS (GALE)*\n"
-                            f"Novos alvos adicionados: `{alvos_novos}`\n"
-                            f"Alvos Totais: `{st.session_state.alvos_sinal}`"
+                            f"Novos alvos adicionados: `{list(novos_alvos_unicos)}`\n"
+                            f"Alvos Totais ({len(alvos_finais)}): `{alvos_finais}`"
                         )
             elif permitido:
                 st.session_state.sinal_ativo = True
-                st.session_state.alvos_sinal = res_ultimo["alvos"]
+                st.session_state.alvos_sinal = list(dict.fromkeys(res_ultimo["alvos"]))
                 st.session_state.tentativa_atual = 0
                 enviar_alerta_telegram(
                     res_ultimo["ultimo"],
@@ -607,7 +633,8 @@ if st.session_state.historico:
     cols = st.columns(min(len(esteira), 13))
     for i, num in enumerate(esteira):
         with cols[i]:
-            st.metric(label=f"Pos {i+1:02d}", value=num)
+            rotulo = "Atual" if i == 0 else f"-{i}r"
+            st.metric(label=rotulo, value=num)
 
 if st.session_state.historico and len(st.session_state.historico) >= 2:
     res_brk_painel = validar_gatilho_sequencial_brk(st.session_state.historico)
@@ -637,12 +664,12 @@ if st.session_state.historico:
     dados_tabela = []
     janela_exibicao = st.session_state.historico[:14]
     
-    for idx, num in enumerate(janela_exibicao):
+    for idx in range(len(janela_exibicao)):
         sub_hist = st.session_state.historico[idx:]
         res = analisar_rodada_especifica(sub_hist)
         
         dados_tabela.append({
-            "Posição": f"Pos {idx+1:02d}",
+            "Posição": "Atual" if idx == 0 else f"-{idx}r",
             "Último": res["ultimo"],
             "Esquerda": res["esquerda"],
             "Direita": res["direita"],
