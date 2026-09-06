@@ -615,7 +615,7 @@ if st.session_state.historico:
 st.markdown("---")
 st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro (Racetrack)")
 
-ultimas_200 = st.session_state.historico[:80]
+ultimas_80 = st.session_state.historico[:80]
 qtd = len(ultimas_80)
 
 if qtd >= 20:
