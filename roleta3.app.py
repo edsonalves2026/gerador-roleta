@@ -707,7 +707,7 @@ if st.session_state.historico and len(st.session_state.historico) >= 2:
         
         c_prio, c_cob = st.columns(2)
         with c_prio:
-            st.error(f"🔥 **PRIORIDADE MÁXIMA (Ainda não saíram nas 100 rodadas):**\n\n`{res_brk_painel['prioridade_maxima']}`")
+            st.error(f"🔥 **PRIORIDADE MÁXIMA (Ainda não saíram nas 50 rodadas):**\n\n`{res_brk_painel['prioridade_maxima']}`")
         with c_cob:
             st.warning(f"🛡️ **COBERTURA (Já saíram no histórico):**\n\n`{res_brk_painel['cobertura']}`")
         st.info("⏱️ **Estratégia Recomendada:** Manter apostas neste grupo pelas próximas **3 rodadas**.")
