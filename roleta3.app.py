@@ -88,15 +88,13 @@ URLS_ROLETAS = {
 # ==========================================
 def buscar_puxadores_dinamicos(numero_alvo, historico):
     """
-    Espaço direcionado para o MODO DINÂMICO:
-    Analisa todo o histórico (0 a 36) para ver quais dezenas
-    mais frequentemente sucederam o número alvo.
+    Mapeia a frequência do vetor de probabilidade no histórico.
+    Busca o número alvo e retorna até 4 dezenas de maior frequência transicional.
     """
     if len(historico) < 2:
         return []
     
     subsequentes = []
-    # Percorre o histórico buscando ocorrências do número alvo e captura o número seguinte
     for i in range(len(historico) - 1):
         if historico[i] == numero_alvo:
             subsequentes.append(historico[i + 1])
@@ -104,7 +102,6 @@ def buscar_puxadores_dinamicos(numero_alvo, historico):
     if not subsequentes:
         return []
     
-    # Retorna as 4 dezenas de maior frequência após o número alvo
     contagem = pd.Series(subsequentes).value_counts()
     return contagem.head(4).index.tolist()
 
@@ -369,11 +366,10 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     alvos = set()
     filtros_ativos = []
 
-    # Obtenção explícita dos puxadores para as colunas
+    # Mapeamento completo das 4 dezenas
     puxadores_brk = TABELA_PUXADORES_FIXA_BRK.get(ultimo, [])
     puxadores_dinamico = buscar_puxadores_dinamicos(ultimo, sub_historico)
 
-    # Seleção dos puxadores de acordo com o modo ativo no sistema
     modo_atual = st.session_state.get("modo_operacional_atual", "DINAMICO")
     if modo_atual == "DINAMICO" and puxadores_dinamico:
         puxadores_ativos = puxadores_dinamico
@@ -386,10 +382,11 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
         filtros_ativos.append(f"OcultosBRK(G{res_brk['grupo_confirmado']})")
         alvos.update(res_brk["grupo_completo"])
 
+    # Inclui TODAS as 4 dezenas puxadoras para cruzamento completo com os filtros
     if puxadores_ativos:
         score += 1
         filtros_ativos.append("Puxadores")
-        alvos.update(puxadores_ativos[:2])
+        alvos.update(puxadores_ativos)
 
     vizinhos = obter_vizinhos_mesa(ultimo)
     score += 1
@@ -449,8 +446,8 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
         "ultimo": ultimo,
         "esquerda": f"{vizinhos['esq_2']} | {vizinhos['esq_1']}",
         "direita": f"{vizinhos['dir_1']} | {vizinhos['dir_2']}",
-        "puxadores_brk": str(puxadores_brk[:2]) if puxadores_brk else "-",
-        "puxadores_dinamico": str(puxadores_dinamico[:2]) if puxadores_dinamico else "-",
+        "puxadores_brk": str(puxadores_brk) if puxadores_brk else "-",
+        "puxadores_dinamico": str(puxadores_dinamico) if puxadores_dinamico else "-",
         "vizinhos_str": f"Esq({vizinhos['esq_1']}), Dir({vizinhos['dir_1']})",
         "camuflados": str(obter_camuflados(ultimo)),
         "racetrack": setor_dom,
@@ -504,7 +501,6 @@ if modo_ativo != st.session_state.modo_operacional_atual:
 else:
     st.session_state.rodadas_no_modo_atual += 1
 
-# --- LED INFORMATIVO ---
 if modo_ativo == "DINAMICO":
     st.markdown(
         f"🟢 **MODO ATIVO:** `MODO OCULTOS DINÂMICO` &nbsp;|&nbsp; "
@@ -640,7 +636,6 @@ def processar_novo_numero(num_novo):
                     modo_estrategia=estrategia_telegram
                 )
 
-# Modo Online / Manual
 if modo_operacao == "On-line (Captura Automática)":
     st.sidebar.info(f"🟢 Conectado: **{roleta_selecionada}**")
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
@@ -681,7 +676,6 @@ else:
                 del st.session_state[chave]
         st.rerun()
 
-# Visualização Principal
 st.subheader("Esteira Temporal (Janela de 14 Rodadas)")
 if st.session_state.historico:
     esteira = st.session_state.historico[:14]
@@ -690,7 +684,6 @@ if st.session_state.historico:
         with cols[i]:
             st.metric(label=f"Pos {i+1:02d}", value=num)
 
-# Alerta BRK
 if st.session_state.historico and len(st.session_state.historico) >= 2:
     historico_cronologico = list(reversed(st.session_state.historico))
     res_brk_painel = validar_gatilho_sequencial_brk(historico_cronologico)
@@ -713,7 +706,7 @@ if st.session_state.ultimo_resultado:
     else:
         st.error(f"⚠️ Resultado do Último Sinal: **{st.session_state.ultimo_resultado}**")
 
-# Tabela Analítica
+# Tabela Analítica Exibindo 4 Dezenas Completa
 if st.session_state.historico:
     st.markdown("---")
     st.subheader(f"📊 Mapeamento Analítico - {roleta_selecionada}")
