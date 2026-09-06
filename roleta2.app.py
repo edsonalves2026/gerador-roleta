@@ -622,22 +622,19 @@ if qtd >= 20:
         cont = pd.Series(ultimas_200).value_counts().reindex(range(37), fill_value=0)
         max_freq = int(max(cont.values)) if max(cont.values) > 0 else 1
 
-        # Mapeamento oficial de cores da roleta
         VERMELHOS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
 
         def get_estilo_celula(num):
             freq = int(cont.get(num, 0))
             intensidade = freq / max_freq
 
-            # Cor base real do número
             if num == 0:
-                base_color = "#1b6d43" # Verde
+                base_color = "#1b6d43"
             elif num in VERMELHOS:
-                base_color = "#8b181b" # Vermelho
+                base_color = "#8b181b"
             else:
-                base_color = "#111111" # Preto
+                base_color = "#111111"
 
-            # Borda/Glow dinâmico baseado na frequência (Mapa de Calor)
             if intensidade > 0.70:
                 glow = "border: 2px solid #ff4444; box-shadow: inset 0 0 8px #ff4444;"
             elif intensidade > 0.40:
@@ -653,146 +650,68 @@ if qtd >= 20:
         curva_dir = [3, 26, 0]
 
         def render_cells(nums):
-            html = ""
+            cells = []
             for n in nums:
                 f = int(cont.get(n, 0))
-                html += f'<div class="rt-cell" style="{get_estilo_celula(n)}"><span>{n}</span><small>({f})</small></div>'
-            return html
+                cells.append(f'<div class="rt-cell" style="{get_estilo_celula(n)}"><span>{n}</span><small>({f})</small></div>')
+            return "".join(cells)
 
-        html_racetrack = f"""
-        <style>
-            .rt-wrapper {{
-                width: 100%;
-                max-width: 900px;
-                margin: 20px auto;
-                background: #08080a;
-                padding: 12px;
-                border-radius: 90px;
-                border: 3px solid #d4af37;
-                box-shadow: 0 0 20px rgba(0,0,0,0.8);
-                font-family: Arial, sans-serif;
-            }}
-            .rt-outer {{
-                display: flex;
-                flex-direction: column;
-                position: relative;
-                border-radius: 80px;
-                overflow: hidden;
-            }}
-            .rt-row {{
-                display: flex;
-                width: 100%;
-            }}
-            .rt-cell {{
-                flex: 1;
-                height: 48px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                color: #fff;
-                font-weight: bold;
-                font-size: 13px;
-                margin: 1px;
-                border-radius: 3px;
-                box-sizing: border-box;
-            }}
-            .rt-cell small {{
-                font-size: 9px;
-                color: #ccc;
-                font-weight: normal;
-            }}
-            .rt-middle {{
-                display: flex;
-                height: 70px;
-            }}
-            .rt-curva-esq, .rt-curva-dir {{
-                width: 120px;
-                display: flex;
-                flex-direction: column;
-            }}
-            .rt-center-area {{
-                flex: 1;
-                display: flex;
-                background: #050505;
-                border: 1px solid #333;
-                margin: 1px;
-                border-radius: 4px;
-            }}
-            .rt-sector {{
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: #d4af37;
-                font-weight: bold;
-                font-size: 13px;
-                letter-spacing: 1px;
-            }}
-            .sec-tier {{ flex: 2.5; border-right: 1px solid #333; position: relative; }}
-            .sec-tier::after {{
-                content: '';
-                position: absolute;
-                right: -10px;
-                top: 0;
-                bottom: 0;
-                width: 1px;
-                background: #333;
-                transform: rotate(25deg);
-            }}
-            .sec-orphelins {{ flex: 2.5; border-right: 1px solid #333; }}
-            .sec-voisins {{ flex: 3; border-right: 1px solid #333; }}
-            .sec-zero {{ 
-                flex: 2; 
-                border: 1px solid #555; 
-                border-radius: 35px; 
-                margin: 6px;
-                background: #0d0d10;
-            }}
-        </style>
+        topo_html = render_cells(topo_nums)
+        base_html = render_cells(base_nums)
 
+        esq_0, esq_1, esq_2 = [f'<div class="rt-cell" style="{get_estilo_celula(n)}"><span>{n}</span><small>({int(cont.get(n,0))})</small></div>' for n in curva_esq]
+        dir_0, dir_1, dir_2 = [f'<div class="rt-cell" style="{get_estilo_celula(n)}"><span>{n}</span><small>({int(cont.get(n,0))})</small></div>' for n in curva_dir]
+
+        css_style = """<style>
+            .rt-wrapper { width: 100%; max-width: 950px; margin: 15px auto; background: #08080a; padding: 12px; border-radius: 80px; border: 2px solid #d4af37; font-family: Arial, sans-serif; }
+            .rt-outer { display: flex; flex-direction: column; width: 100%; }
+            .rt-row { display: flex; width: 100%; justify-content: center; }
+            .rt-spacer { width: 45px; flex-shrink: 0; }
+            .rt-cell { flex: 1; height: 46px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 12px; margin: 1px; border-radius: 3px; box-sizing: border-box; }
+            .rt-cell small { font-size: 8px; color: #bbb; font-weight: normal; }
+            .rt-middle { display: flex; height: 75px; width: 100%; margin: 1px 0; }
+            .rt-curva-esq, .rt-curva-dir { width: 45px; display: flex; flex-direction: column; flex-shrink: 0; }
+            .rt-center-area { flex: 1; display: flex; background: #050505; border: 1px solid #333; margin: 0 2px; border-radius: 4px; align-items: center; }
+            .rt-sector { display: flex; align-items: center; justify-content: center; color: #d4af37; font-weight: bold; font-size: 11px; letter-spacing: 1px; height: 100%; }
+            .sec-tier { flex: 3; border-right: 1px solid #333; }
+            .sec-orphelins { flex: 2.5; border-right: 1px solid #333; }
+            .sec-voisins { flex: 3.5; border-right: 1px solid #333; }
+            .sec-zero { flex: 2; border: 1px solid #555; border-radius: 30px; margin: 4px; background: #0d0d10; height: 80%; }
+        </style>"""
+
+        html_content = f"""{css_style}
         <div class="rt-wrapper">
             <div class="rt-outer">
-                <!-- LINHA SUPERIOR -->
                 <div class="rt-row">
-                    <div style="width: 40px;"></div>
-                    {render_cells(topo_nums)}
-                    <div style="width: 40px;"></div>
+                    <div class="rt-spacer"></div>
+                    {topo_html}
+                    <div class="rt-spacer"></div>
                 </div>
-
-                <!-- LINHA CENTRAL -->
                 <div class="rt-middle">
                     <div class="rt-curva-esq">
-                        <div class="rt-cell" style="{get_estilo_celula(curva_esq[0])}"><span>{curva_esq[0]}</span><small>({int(cont.get(curva_esq[0],0))})</small></div>
-                        <div class="rt-cell" style="{get_estilo_celula(curva_esq[1])}"><span>{curva_esq[1]}</span><small>({int(cont.get(curva_esq[1],0))})</small></div>
-                        <div class="rt-cell" style="{get_estilo_celula(curva_esq[2])}"><span>{curva_esq[2]}</span><small>({int(cont.get(curva_esq[2],0))})</small></div>
+                        {esq_0}{esq_1}{esq_2}
                     </div>
-
                     <div class="rt-center-area">
                         <div class="rt-sector sec-tier">TIER</div>
                         <div class="rt-sector sec-orphelins">ORPHELINS</div>
                         <div class="rt-sector sec-voisins">VOISINS</div>
                         <div class="rt-sector sec-zero">ZERO</div>
                     </div>
-
                     <div class="rt-curva-dir">
-                        <div class="rt-cell" style="{get_estilo_celula(curva_dir[0])}"><span>{curva_dir[0]}</span><small>({int(cont.get(curva_dir[0],0))})</small></div>
-                        <div class="rt-cell" style="{get_estilo_celula(curva_dir[1])}"><span>{curva_dir[1]}</span><small>({int(cont.get(curva_dir[1],0))})</small></div>
-                        <div class="rt-cell" style="{get_estilo_celula(curva_dir[2])}"><span>{curva_dir[2]}</span><small>({int(cont.get(curva_dir[2],0))})</small></div>
+                        {dir_0}{dir_1}{dir_2}
                     </div>
                 </div>
-
-                <!-- LINHA INFERIOR -->
                 <div class="rt-row">
-                    <div style="width: 40px;"></div>
-                    {render_cells(base_nums)}
-                    <div style="width: 40px;"></div>
+                    <div class="rt-spacer"></div>
+                    {base_html}
+                    <div class="rt-spacer"></div>
                 </div>
             </div>
         </div>
         """
 
-        st.markdown(html_racetrack, unsafe_allow_html=True)
-        st.caption("Dica: Os números piscam/destacam em amarelo e vermelho conforme a frequência das últimas 200 rodadas.")
+        st.markdown(html_content, unsafe_allow_html=True)
+        st.caption("🌡️ Distribuição Racetrack | As cores esquentam dinamicamente conforme a frequência das últimas 200 rodadas.")
     except Exception as e:
         st.error(f"Erro ao renderizar o Racetrack: {e}")
 else:
