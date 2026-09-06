@@ -963,8 +963,6 @@ with st.expander("📖 Manual Completo do Sistema — Regras e Funcionamento", e
 # ==========================================
 st.markdown("---")
 st.caption(""")
-🔄 Atualização automática a cada 15s | 🤖 Alertas via Telegram | v3.0 Otimizado
-""")
 
 # ==========================================
 # AUTO-REFRESH CONTROLADO
