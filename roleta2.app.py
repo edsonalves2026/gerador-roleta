@@ -565,8 +565,8 @@ def processar_novo_numero(num_novo):
                 permitido = True
             elif filtro_hibrido_opcao == "👑 Elite (Top 3 - Máxima Precisão)" and tier_do_padrao == "👑 Elite (Top 3)":
                 permitido = True
-        if st.session_state.sinal_ativo:
-        if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
+           if st.session_state.sinal_ativo:
+           if "Fusão" in modo_gale_opcao and tier_do_padrao == "👑 Elite (Top 3)":
             alvos_atuais = set(st.session_state.alvos_sinal)
             novos_alvos_unicos = set(res_ultimo.get("alvos", [])) - alvos_atuais
             
