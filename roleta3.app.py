@@ -214,7 +214,6 @@ def enviar_alerta_telegram(ultimo_num, score, alvos, detalhes, tier_nome="", pos
     str_rank = f"📊 Posição no Ranking: #{posicao_rank}º lugar ({taxa_acerto}% de assertividade)\n" if posicao_rank else ""
     str_estrategia = f"⚙️ Estratégia: {modo_estrategia}\n" if modo_estrategia else ""
     
-    # Sanitiza Markdown para evitar erro 400 da API
     str_estrategia = str_estrategia.replace("_", "\\_")
     
     mensagem = (
@@ -550,7 +549,6 @@ modo_gale_opcao = st.sidebar.radio(
 st.sidebar.markdown("---")
 
 def processar_novo_numero(num_novo):
-    # 1. Processa se já existia um sinal ativo aguardando resultado
     if st.session_state.sinal_ativo:
         st.session_state.tentativa_atual += 1
         etapas = {1: "Entrada Direta", 2: "Gale 1 (G1)", 3: "Gale 2 (G2)"}
@@ -572,7 +570,6 @@ def processar_novo_numero(num_novo):
             st.session_state.alvos_sinal = []
             return
 
-    # 2. Avalia histórico + novo número recebido para novos disparos de sinal
     novo_historico_temp = [num_novo] + st.session_state.historico
     if len(novo_historico_temp) >= 10:
         historico_analise = list(reversed(novo_historico_temp))
