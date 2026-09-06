@@ -674,6 +674,7 @@ if st.session_state.ultimo_resultado:
         st.success(f"🎉 Resultado do Último Sinal: **{st.session_state.ultimo_resultado}**")
     else:
         st.error(f"⚠️ Resultado do Último Sinal: **{st.session_state.ultimo_resultado}**")
+        
 # ==========================================
 # 10. SINAL ATIVO — GALE & ACOMPANHAMENTO
 # ==========================================
@@ -705,6 +706,34 @@ if st.session_state.get('sinal_ativo', False):
 else:
     st.success("✅ Nenhum sinal ativo — Aguardando padrão convergente...")
 
+  # Alerta Manual
+    historico_analise = list(reversed(st.session_state.historico))
+    res_ultimo = analisar_rodada_especifica(historico_analise)
+    if res_ultimo["score_num"] >= 4:
+        st.error(f"🚨 SINAL IDENTIFICADO: {res_ultimo['alvos']}")
+            
+        if st.button("📤 Reenviar Alerta para Telegram"):
+            posicao_rank = None
+            taxa_acerto = None
+            if not df_rank.empty and res_ultimo["padrao_nome"] in df_rank["Padrão"].values:
+                idx = df_rank[df_rank["Padrão"] == res_ultimo["padrao_nome"]].index[0]
+                posicao_rank = idx + 1
+                taxa_acerto = df_rank.loc[idx, "Taxa de Acerto (%)"]
+            
+            sucesso, msg = enviar_alerta_telegram(
+                res_ultimo["ultimo"],
+                res_ultimo["score_num"],
+                res_ultimo["alvos"],
+                [res_ultimo["status"]],
+                posicao_rank=posicao_rank,
+                taxa_acerto=taxa_acerto
+            )
+            if sucesso:
+                st.success(msg)
+            else:
+                st.error(msg)
+else:
+    st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # Tabela Analítica
 if st.session_state.historico:
@@ -737,43 +766,6 @@ if st.session_state.historico:
     
     df_exibicao = pd.DataFrame(dados_tabela)
     st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
-
-  # Ranking dos Tiers
-    tiers_atuais, df_rank = obter_tiers_cache()
-    with st.expander("🏆 Ranking dos Padrões (Últimas 200 Rodadas)", expanded=False):
-        if not df_rank.empty:
-            st.dataframe(df_rank, use_container_width=True, hide_index=True)
-        else:
-            st.info("Aguardando histórico suficiente (mínimo ~20 sinais) para consolidação do ranking.")
-
-    # Alerta Manual
-    historico_analise = list(reversed(st.session_state.historico))
-    res_ultimo = analisar_rodada_especifica(historico_analise)
-    if res_ultimo["score_num"] >= 4:
-        st.error(f"🚨 SINAL IDENTIFICADO: {res_ultimo['alvos']}")
-            
-        if st.button("📤 Reenviar Alerta para Telegram"):
-            posicao_rank = None
-            taxa_acerto = None
-            if not df_rank.empty and res_ultimo["padrao_nome"] in df_rank["Padrão"].values:
-                idx = df_rank[df_rank["Padrão"] == res_ultimo["padrao_nome"]].index[0]
-                posicao_rank = idx + 1
-                taxa_acerto = df_rank.loc[idx, "Taxa de Acerto (%)"]
-            
-            sucesso, msg = enviar_alerta_telegram(
-                res_ultimo["ultimo"],
-                res_ultimo["score_num"],
-                res_ultimo["alvos"],
-                [res_ultimo["status"]],
-                posicao_rank=posicao_rank,
-                taxa_acerto=taxa_acerto
-            )
-            if sucesso:
-                st.success(msg)
-            else:
-                st.error(msg)
-else:
-    st.info("Aguardando dados da API ou inserção manual no painel lateral...")
 
 # ==========================================
 # 9. ESTATÍSTICAS E MAPA DE CALOR
@@ -946,6 +938,15 @@ else:
 # Verifica se existe histórico antes de renderizar as estatísticas
 if st.session_state.get("historico", []):
 
+ # Ranking dos Tiers
+    tiers_atuais, df_rank = obter_tiers_cache()
+    with st.expander("🏆 Ranking dos Padrões (Últimas 200 Rodadas)", expanded=False):
+        if not df_rank.empty:
+            st.dataframe(df_rank, use_container_width=True, hide_index=True)
+        else:
+            st.info("Aguardando histórico suficiente (mínimo ~20 sinais) para consolidação do ranking.")
+
+    
     # === RANKING DE PADRÕES ===
     st.markdown("---")
     st.subheader("🏆 Ranking de Padrões — Taxa de Acerto Histórica")
