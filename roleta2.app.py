@@ -777,9 +777,9 @@ if st.session_state.historico:
                 for n in bloco:
                     if n == 0:
                         bg_cor = "#00AA00"
-                    elif n in NUMEROS_VERMELHOS:
+             elif n in NUMEROS_VERMELHOS:
                         bg_cor = "#FF2222"
-                    else:
+             else:
                         bg_cor = "#111111"
                     
                     spans_bloco.append(
