@@ -918,7 +918,7 @@ else:
 # ==========================================
 st.markdown("---")
 with st.expander("📖 Manual Completo do Sistema — Regras e Funcionamento", expanded=False):
-    st.markdown(""")
+    st.markdown("""
     ### 🎯 Sistema TIRO CERTO + HEAD-SHOT
 
     **Objetivo:** Identificar padrões estatísticos com convergência de critérios e sugerir números com maior probabilidade de sair.
@@ -958,7 +958,14 @@ with st.expander("📖 Manual Completo do Sistema — Regras e Funcionamento", e
     | 🥇 Ouro | Top 5 padrões |
     | 👑 Elite | Apenas Top 3 padrões (maior precisão) |
     
-
+---
+    ### ⚙️ Requisição API
+    - Atualização automática a cada **15 segundos** (apenas quando houver novo número)
+    - Timeout de proteção: **8 segundos** por requisição
+    - Limite de histórico carregado: **200 rodadas**
+    """)
+    
+    
 # ==========================================
 # AUTO-REFRESH CONTROLADO
 # ==========================================
