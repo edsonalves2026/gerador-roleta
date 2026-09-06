@@ -918,7 +918,7 @@ else:
 # ==========================================
 st.markdown("---")
 with st.expander("📖 Manual Completo do Sistema — Regras e Funcionamento", expanded=False):
-    st.markdown("""
+    st.markdown(""")
     ### 🎯 Sistema TIRO CERTO + HEAD-SHOT
 
     **Objetivo:** Identificar padrões estatísticos com convergência de critérios e sugerir números com maior probabilidade de sair.
