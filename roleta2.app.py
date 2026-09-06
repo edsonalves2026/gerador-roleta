@@ -612,28 +612,191 @@ if st.session_state.historico:
 # MAPA DE CALOR (LAYOUT RACETRACK / PISTA)
 # ==========================================
 st.markdown("---")
-st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro")
+st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro (Racetrack)")
 
 ultimas_200 = st.session_state.historico[:200]
 qtd = len(ultimas_200)
 
 if qtd >= 20:
-    cont = pd.Series(ultimas_200).value_counts().reindex(range(37), fill_value=0)
-    
-    # Ordem física da roleta europeia
-    ordem_roleta = [
-        0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 
-        10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
-    ]
-    
-    # Exibição limpa em grid contínuo
-    cols = st.columns(12)
-    for idx, num in enumerate(ordem_roleta):
-        freq = int(cont.get(num, 0))
-        with cols[idx % 12]:
-            st.metric(label=f"Nº {num}", value=f"{freq}x")
+    try:
+        cont = pd.Series(ultimas_200).value_counts().reindex(range(37), fill_value=0)
+        max_freq = int(max(cont.values)) if max(cont.values) > 0 else 1
+
+        # Mapeamento oficial de cores da roleta
+        VERMELHOS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
+
+        def get_estilo_celula(num):
+            freq = int(cont.get(num, 0))
+            intensidade = freq / max_freq
+
+            # Cor base real do número
+            if num == 0:
+                base_color = "#1b6d43" # Verde
+            elif num in VERMELHOS:
+                base_color = "#8b181b" # Vermelho
+            else:
+                base_color = "#111111" # Preto
+
+            # Borda/Glow dinâmico baseado na frequência (Mapa de Calor)
+            if intensidade > 0.70:
+                glow = "border: 2px solid #ff4444; box-shadow: inset 0 0 8px #ff4444;"
+            elif intensidade > 0.40:
+                glow = "border: 2px solid #ffbb33; box-shadow: inset 0 0 5px #ffbb33;"
+            else:
+                glow = "border: 1px solid #444;"
+
+            return f"background: {base_color}; {glow}"
+
+        topo_nums = [5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35]
+        base_nums = [30, 11, 36, 13, 27, 6, 34, 17, 25, 2, 21, 4, 19, 15, 32]
+        curva_esq = [10, 23, 8]
+        curva_dir = [3, 26, 0]
+
+        def render_cells(nums):
+            html = ""
+            for n in nums:
+                f = int(cont.get(n, 0))
+                html += f'<div class="rt-cell" style="{get_estilo_celula(n)}"><span>{n}</span><small>({f})</small></div>'
+            return html
+
+        html_racetrack = f"""
+        <style>
+            .rt-wrapper {{
+                width: 100%;
+                max-width: 900px;
+                margin: 20px auto;
+                background: #08080a;
+                padding: 12px;
+                border-radius: 90px;
+                border: 3px solid #d4af37;
+                box-shadow: 0 0 20px rgba(0,0,0,0.8);
+                font-family: Arial, sans-serif;
+            }}
+            .rt-outer {{
+                display: flex;
+                flex-direction: column;
+                position: relative;
+                border-radius: 80px;
+                overflow: hidden;
+            }}
+            .rt-row {{
+                display: flex;
+                width: 100%;
+            }}
+            .rt-cell {{
+                flex: 1;
+                height: 48px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                color: #fff;
+                font-weight: bold;
+                font-size: 13px;
+                margin: 1px;
+                border-radius: 3px;
+                box-sizing: border-box;
+            }}
+            .rt-cell small {{
+                font-size: 9px;
+                color: #ccc;
+                font-weight: normal;
+            }}
+            .rt-middle {{
+                display: flex;
+                height: 70px;
+            }}
+            .rt-curva-esq, .rt-curva-dir {{
+                width: 120px;
+                display: flex;
+                flex-direction: column;
+            }}
+            .rt-center-area {{
+                flex: 1;
+                display: flex;
+                background: #050505;
+                border: 1px solid #333;
+                margin: 1px;
+                border-radius: 4px;
+            }}
+            .rt-sector {{
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #d4af37;
+                font-weight: bold;
+                font-size: 13px;
+                letter-spacing: 1px;
+            }}
+            .sec-tier {{ flex: 2.5; border-right: 1px solid #333; position: relative; }}
+            .sec-tier::after {{
+                content: '';
+                position: absolute;
+                right: -10px;
+                top: 0;
+                bottom: 0;
+                width: 1px;
+                background: #333;
+                transform: rotate(25deg);
+            }}
+            .sec-orphelins {{ flex: 2.5; border-right: 1px solid #333; }}
+            .sec-voisins {{ flex: 3; border-right: 1px solid #333; }}
+            .sec-zero {{ 
+                flex: 2; 
+                border: 1px solid #555; 
+                border-radius: 35px; 
+                margin: 6px;
+                background: #0d0d10;
+            }}
+        </style>
+
+        <div class="rt-wrapper">
+            <div class="rt-outer">
+                <!-- LINHA SUPERIOR -->
+                <div class="rt-row">
+                    <div style="width: 40px;"></div>
+                    {render_cells(topo_nums)}
+                    <div style="width: 40px;"></div>
+                </div>
+
+                <!-- LINHA CENTRAL -->
+                <div class="rt-middle">
+                    <div class="rt-curva-esq">
+                        <div class="rt-cell" style="{get_estilo_celula(curva_esq[0])}"><span>{curva_esq[0]}</span><small>({int(cont.get(curva_esq[0],0))})</small></div>
+                        <div class="rt-cell" style="{get_estilo_celula(curva_esq[1])}"><span>{curva_esq[1]}</span><small>({int(cont.get(curva_esq[1],0))})</small></div>
+                        <div class="rt-cell" style="{get_estilo_celula(curva_esq[2])}"><span>{curva_esq[2]}</span><small>({int(cont.get(curva_esq[2],0))})</small></div>
+                    </div>
+
+                    <div class="rt-center-area">
+                        <div class="rt-sector sec-tier">TIER</div>
+                        <div class="rt-sector sec-orphelins">ORPHELINS</div>
+                        <div class="rt-sector sec-voisins">VOISINS</div>
+                        <div class="rt-sector sec-zero">ZERO</div>
+                    </div>
+
+                    <div class="rt-curva-dir">
+                        <div class="rt-cell" style="{get_estilo_celula(curva_dir[0])}"><span>{curva_dir[0]}</span><small>({int(cont.get(curva_dir[0],0))})</small></div>
+                        <div class="rt-cell" style="{get_estilo_celula(curva_dir[1])}"><span>{curva_dir[1]}</span><small>({int(cont.get(curva_dir[1],0))})</small></div>
+                        <div class="rt-cell" style="{get_estilo_celula(curva_dir[2])}"><span>{curva_dir[2]}</span><small>({int(cont.get(curva_dir[2],0))})</small></div>
+                    </div>
+                </div>
+
+                <!-- LINHA INFERIOR -->
+                <div class="rt-row">
+                    <div style="width: 40px;"></div>
+                    {render_cells(base_nums)}
+                    <div style="width: 40px;"></div>
+                </div>
+            </div>
+        </div>
+        """
+
+        st.markdown(html_racetrack, unsafe_allow_html=True)
+        st.caption("Dica: Os números piscam/destacam em amarelo e vermelho conforme a frequência das últimas 200 rodadas.")
+    except Exception as e:
+        st.error(f"Erro ao renderizar o Racetrack: {e}")
 else:
-    st.info(f"Dados insuficientes para mapa de calor ({qtd}/20)")
+    st.info(f"Dados insuficientes para mapa de calor no Racetrack ({qtd}/20)")
     
 # ==========================================
 # 10. SINAL ATIVO — GALE & ACOMPANHAMENTO
