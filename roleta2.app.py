@@ -475,6 +475,20 @@ else:
     estrategia_telegram = f"Puxadores Estáticos + Oculto BRK (Score: {score_brk}%)"
 st.markdown("---")
 
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+
+# ==========================================
+# GARANTIA DE VARIÁVEIS E ESTADOS GLOBAIS
+# ==========================================
+# Trata erro de variável não declarada (NameError)
+if 'roleta_selecionada' not in globals() and 'roleta_selecionada' not in locals():
+    roleta_selecionada = st.session_state.get('roleta_selecionada', 'Roleta Principal')
+
+if 'historico' not in st.session_state:
+    st.session_state.historico = []
+
 # ==========================================
 # 8. TABELA ANALÍTICA
 # ==========================================
@@ -488,8 +502,11 @@ if st.session_state.historico:
     for idx in range(len(janela_exibicao)):
         sub_hist = st.session_state.historico[idx:]
         
-        # Garante que a função receba sub_hist válido
-        res = analisar_rodada_especifica(sub_hist) if 'analisar_rodada_especifica' in globals() else {}
+        # Chamada segura da função analítica
+        if 'analisar_rodada_especifica' in globals():
+            res = analisar_rodada_especifica(sub_hist)
+        else:
+            res = {}
         
         dados_tabela.append({
             "Posição": "Atual" if idx == 0 else f"-{idx}r",
