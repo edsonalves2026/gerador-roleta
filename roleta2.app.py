@@ -573,7 +573,7 @@ if st.session_state.historico:
         else:
             st.info(f"Dados insuficientes ({qtd}/12)")
 
-with c3:
+    with c3:
     st.markdown("### 🎨 Mapa de Cores — Últimas 100")
     
     if qtd > 0:
