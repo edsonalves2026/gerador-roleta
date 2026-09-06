@@ -608,72 +608,7 @@ if st.session_state.historico:
             """, unsafe_allow_html=True)
         else:
             st.info(f"Dados insuficientes ({qtd}/10)")
-
-# ==========================================
-# MAPA DE CALOR (LAYOUT RACETRACK / PISTA)
-# ==========================================
-st.markdown("---")
-st.subheader("🌡️ Mapa de Calor — Distribuição no Cilindro (Racetrack)")
-
-ultimas_200 = st.session_state.historico[:200]
-qtd = len(ultimas_200)
-
-if qtd >= 20:
-    try:
-        cont = pd.Series(ultimas_200).value_counts().reindex(range(37), fill_value=0)
-        max_freq = int(max(cont.values)) if max(cont.values) > 0 else 1
-
-        VERMELHOS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
-
-        def get_estilo_celula(num):
-            freq = int(cont.get(num, 0))
-            intensidade = freq / max_freq
-
-            if num == 0:
-                base_color = "#1b6d43"
-            elif num in VERMELHOS:
-                base_color = "#8b181b"
-            else:
-                base_color = "#111111"
-
-            if intensidade > 0.70:
-                glow = "border: 2px solid #ff4444; box-shadow: inset 0 0 8px #ff4444;"
-            elif intensidade > 0.40:
-                glow = "border: 2px solid #ffbb33; box-shadow: inset 0 0 5px #ffbb33;"
-            else:
-                glow = "border: 1px solid #444;"
-
-            return f"background: {base_color}; {glow}"
-
-        topo_nums = [5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35]
-        base_nums = [30, 11, 36, 13, 27, 6, 34, 17, 25, 2, 21, 4, 19, 15, 32]
-        curva_esq = [10, 23, 8]
-        curva_dir = [3, 26, 0]
-
-        def render_cells(nums):
-            cells = []
-            for n in nums:
-                f = int(cont.get(n, 0))
-                cells.append(f'<div class="rt-cell" style="{get_estilo_celula(n)}"><span>{n}</span><small>({f})</small></div>')
-            return "".join(cells)
-
-        topo_html = render_cells(topo_nums)
-        base_html = render_cells(base_nums)
-
-        esq_0, esq_1, esq_2 = [f'<div class="rt-cell" style="{get_estilo_celula(n)}"><span>{n}</span><small>({int(cont.get(n,0))})</small></div>' for n in curva_esq]
-        dir_0, dir_1, dir_2 = [f'<div class="rt-cell" style="{get_estilo_celula(n)}"><span>{n}</span><small>({int(cont.get(n,0))})</small></div>' for n in curva_dir]
-
-        # HTML e CSS totalmente colapsados em linha única para impedir interpretação Markdown
-        raw_html = f"""<style>body {{ background-color: transparent; color: white; margin: 0; font-family: Arial, sans-serif; }} .rt-wrapper {{ width: 100%; max-width: 950px; margin: 0 auto; background: #08080a; padding: 12px; border-radius: 80px; border: 2px solid #d4af37; box-sizing: border-box; }} .rt-outer {{ display: flex; flex-direction: column; width: 100%; }} .rt-row {{ display: flex; width: 100%; justify-content: center; }} .rt-spacer {{ width: 45px; flex-shrink: 0; }} .rt-cell {{ flex: 1; height: 46px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 12px; margin: 1px; border-radius: 3px; box-sizing: border-box; }} .rt-cell small {{ font-size: 8px; color: #bbb; font-weight: normal; }} .rt-middle {{ display: flex; height: 75px; width: 100%; margin: 1px 0; }} .rt-curva-esq, .rt-curva-dir {{ width: 45px; display: flex; flex-direction: column; flex-shrink: 0; }} .rt-center-area {{ flex: 1; display: flex; background: #050505; border: 1px solid #333; margin: 0 2px; border-radius: 4px; align-items: center; }} .rt-sector {{ display: flex; align-items: center; justify-content: center; color: #d4af37; font-weight: bold; font-size: 11px; letter-spacing: 1px; height: 100%; }} .sec-tier {{ flex: 3; border-right: 1px solid #333; }} .sec-orphelins {{ flex: 2.5; border-right: 1px solid #333; }} .sec-voisins {{ flex: 3.5; border-right: 1px solid #333; }} .sec-zero {{ flex: 2; border: 1px solid #555; border-radius: 30px; margin: 4px; background: #0d0d10; height: 80%; }}</style><div class="rt-wrapper"><div class="rt-outer"><div class="rt-row"><div class="rt-spacer"></div>{topo_html}<div class="rt-spacer"></div></div><div class="rt-middle"><div class="rt-curva-esq">{esq_0}{esq_1}{esq_2}</div><div class="rt-center-area"><div class="rt-sector sec-tier">TIER</div><div class="rt-sector sec-orphelins">ORPHELINS</div><div class="rt-sector sec-voisins">VOISINS</div><div class="rt-sector sec-zero">ZERO</div></div><div class="rt-curva-dir">{dir_0}{dir_1}{dir_2}</div></div><div class="rt-row"><div class="rt-spacer"></div>{base_html}<div class="rt-spacer"></div></div></div></div>"""
-
-        # Renderização isolada sem passar pelo parser de Markdown do Streamlit
-        components.html(raw_html, height=210)
-        st.caption("Dica: As casas destacam dinamicamente conforme a frequência das últimas 200 rodadas.")
-    except Exception as e:
-        st.error(f"Erro ao renderizar o Racetrack: {e}")
-else:
-    st.info(f"Dados insuficientes para mapa de calor no Racetrack ({qtd}/20)")
-
+            
 # ==========================================
 # MAPA DE CALOR (LAYOUT RACETRACK / PISTA)
 # ==========================================
