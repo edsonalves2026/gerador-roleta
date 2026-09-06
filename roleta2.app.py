@@ -475,14 +475,9 @@ else:
     estrategia_telegram = f"Puxadores Estáticos + Oculto BRK (Score: {score_brk}%)"
 st.markdown("---")
 
-import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-
 # ==========================================
 # GARANTIA DE VARIÁVEIS E ESTADOS GLOBAIS
 # ==========================================
-# Trata erro de variável não declarada (NameError)
 if 'roleta_selecionada' not in globals() and 'roleta_selecionada' not in locals():
     roleta_selecionada = st.session_state.get('roleta_selecionada', 'Roleta Principal')
 
@@ -501,12 +496,7 @@ if st.session_state.historico:
     
     for idx in range(len(janela_exibicao)):
         sub_hist = st.session_state.historico[idx:]
-        
-        # Chamada segura da função analítica
-        if 'analisar_rodada_especifica' in globals():
-            res = analisar_rodada_especifica(sub_hist)
-        else:
-            res = {}
+        res = analisar_rodada_especifica(sub_hist) if 'analisar_rodada_especifica' in globals() else {}
         
         dados_tabela.append({
             "Posição": "Atual" if idx == 0 else f"-{idx}r",
@@ -628,170 +618,147 @@ ultimas_200 = st.session_state.historico[:200]
 qtd = len(ultimas_200)
 
 if qtd >= 20:
-    cont = pd.Series(ultimas_200).value_counts().reindex(range(37), fill_value=0)
-    max_freq = max(cont.values) if max(cont.values) > 0 else 1
+    try:
+        cont = pd.Series(ultimas_200).value_counts().reindex(range(37), fill_value=0)
+        max_freq = int(max(cont.values)) if max(cont.values) > 0 else 1
 
-    def get_cor_calor(num):
-        freq = cont[num]
-        intensidade = freq / max_freq
-        if intensidade > 0.75:
-            return f"rgba(220, 40, 40, {0.65 + intensidade*0.35})"
-        elif intensidade > 0.50:
-            return f"rgba(230, 120, 20, {0.55 + intensidade*0.35})"
-        elif intensidade > 0.25:
-            return f"rgba(210, 160, 30, {0.45 + intensidade*0.35})"
-        else:
-            return f"rgba(80, 60, 20, {0.35 + intensidade*0.30})"
+        def get_cor_calor(num):
+            freq = int(cont.get(num, 0))
+            intensidade = freq / max_freq
+            if intensidade > 0.75:
+                return f"rgba(220, 40, 40, {0.65 + intensidade*0.35:.2f})"
+            elif intensidade > 0.50:
+                return f"rgba(230, 120, 20, {0.55 + intensidade*0.35:.2f})"
+            elif intensidade > 0.25:
+                return f"rgba(210, 160, 30, {0.45 + intensidade*0.35:.2f})"
+            else:
+                return f"rgba(80, 60, 20, {0.35 + intensidade*0.30:.2f})"
 
-    topo = [
-        {"n": 5, "f": cont[5], "bg": get_cor_calor(5)}, {"n": 24, "f": cont[24], "bg": get_cor_calor(24)},
-        {"n": 16, "f": cont[16], "bg": get_cor_calor(16)}, {"n": 33, "f": cont[33], "bg": get_cor_calor(33)},
-        {"n": 1, "f": cont[1], "bg": get_cor_calor(1)}, {"n": 20, "f": cont[20], "bg": get_cor_calor(20)},
-        {"n": 14, "f": cont[14], "bg": get_cor_calor(14)}, {"n": 31, "f": cont[31], "bg": get_cor_calor(31)},
-        {"n": 9, "f": cont[9], "bg": get_cor_calor(9)}, {"n": 22, "f": cont[22], "bg": get_cor_calor(22)},
-        {"n": 18, "f": cont[18], "bg": get_cor_calor(18)}, {"n": 29, "f": cont[29], "bg": get_cor_calor(29)},
-        {"n": 7, "f": cont[7], "bg": get_cor_calor(7)}, {"n": 28, "f": cont[28], "bg": get_cor_calor(28)},
-        {"n": 12, "f": cont[12], "bg": get_cor_calor(12)}, {"n": 35, "f": cont[35], "bg": get_cor_calor(35)}
-    ]
+        topo_nums = [5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35]
+        base_nums = [30, 11, 36, 13, 27, 6, 34, 17, 25, 2, 21, 4, 19, 15, 32]
+        esq_nums = [10, 23, 8]
+        dir_nums = [3, 26, 0]
 
-    base = [
-        {"n": 30, "f": cont[30], "bg": get_cor_calor(30)}, {"n": 11, "f": cont[11], "bg": get_cor_calor(11)},
-        {"n": 36, "f": cont[36], "bg": get_cor_calor(36)}, {"n": 13, "f": cont[13], "bg": get_cor_calor(13)},
-        {"n": 27, "f": cont[27], "bg": get_cor_calor(27)}, {"n": 6, "f": cont[6], "bg": get_cor_calor(6)},
-        {"n": 34, "f": cont[34], "bg": get_cor_calor(34)}, {"n": 17, "f": cont[17], "bg": get_cor_calor(17)},
-        {"n": 25, "f": cont[25], "bg": get_cor_calor(25)}, {"n": 2, "f": cont[2], "bg": get_cor_calor(2)},
-        {"n": 21, "f": cont[21], "bg": get_cor_calor(21)}, {"n": 4, "f": cont[4], "bg": get_cor_calor(4)},
-        {"n": 19, "f": cont[19], "bg": get_cor_calor(19)}, {"n": 15, "f": cont[15], "bg": get_cor_calor(15)},
-        {"n": 32, "f": cont[32], "bg": get_cor_calor(32)}
-    ]
+        html_topo = "".join([f'<div class="cell" style="background:{get_cor_calor(n)};">{n}<span class="cell-sub">({int(cont.get(n,0))})</span></div>' for n in topo_nums])
+        html_base = "".join([f'<div class="cell" style="background:{get_cor_calor(n)};">{n}<span class="cell-sub">({int(cont.get(n,0))})</span></div>' for n in base_nums])
 
-    curva_esq = [
-        {"n": 10, "f": cont[10], "bg": get_cor_calor(10)},
-        {"n": 23, "f": cont[23], "bg": get_cor_calor(23)},
-        {"n": 8, "f": cont[8], "bg": get_cor_calor(8)}
-    ]
+        c_esq_0, c_esq_1, c_esq_2 = esq_nums[0], esq_nums[1], esq_nums[2]
+        c_dir_0, c_dir_1, c_dir_2 = dir_nums[0], dir_nums[1], dir_nums[2]
 
-    curva_dir = [
-        {"n": 3, "f": cont[3], "bg": get_cor_calor(3)},
-        {"n": 26, "f": cont[26], "bg": get_cor_calor(26)},
-        {"n": 0, "f": cont[0], "bg": get_cor_calor(0)}
-    ]
+        html_racetrack = f"""
+        <style>
+            .racetrack-container {{
+                width: 100%;
+                max-width: 1100px;
+                margin: 0 auto;
+                background: #0d0e12;
+                padding: 15px;
+                border-radius: 40px;
+                border: 2px solid #333;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+                font-family: Arial, sans-serif;
+            }}
+            .racetrack-grid {{
+                display: grid;
+                grid-template-columns: 80px repeat(16, 1fr) 80px;
+                grid-template-rows: auto auto auto;
+                gap: 2px;
+                text-align: center;
+            }}
+            .cell {{
+                padding: 6px 2px;
+                border: 1px solid #222;
+                border-radius: 4px;
+                color: #fff;
+                font-weight: bold;
+                font-size: 13px;
+                min-height: 42px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+            }}
+            .cell-sub {{
+                font-size: 9px;
+                opacity: 0.8;
+                font-weight: normal;
+            }}
+            .center-area {{
+                grid-column: 2 / 18;
+                grid-row: 2;
+                display: flex;
+                align-items: center;
+                justify-content: space-around;
+                background: rgba(25, 28, 36, 0.9);
+                border: 1px solid #444;
+                border-radius: 8px;
+                color: #aaa;
+                font-weight: bold;
+                font-size: 12px;
+                letter-spacing: 1px;
+                padding: 10px 0;
+                margin: 2px 0;
+            }}
+            .sector-title {{
+                flex: 1;
+                text-align: center;
+                border-right: 1px solid #333;
+            }}
+            .sector-title:last-child {{
+                border-right: none;
+            }}
+            .curva-col {{
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                gap: 2px;
+            }}
+        </style>
 
-    html_topo = "".join([f'<div class="cell" style="background:{i["bg"]};">{i["n"]}<span class="cell-sub">({i["f"]})</span></div>' for i in topo])
-    html_base = "".join([f'<div class="cell" style="background:{i["bg"]};">{i["n"]}<span class="cell-sub">({i["f"]})</span></div>' for i in base])
-
-    html_racetrack = f"""
-    <style>
-        .racetrack-container {{
-            width: 100%;
-            max-width: 1100px;
-            margin: 0 auto;
-            background: #0d0e12;
-            padding: 15px;
-            border-radius: 40px;
-            border: 2px solid #333;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            font-family: Arial, sans-serif;
-        }}
-        .racetrack-grid {{
-            display: grid;
-            grid-template-columns: 80px repeat(16, 1fr) 80px;
-            grid-template-rows: auto auto auto;
-            gap: 2px;
-            text-align: center;
-        }}
-        .cell {{
-            padding: 6px 2px;
-            border: 1px solid #222;
-            border-radius: 4px;
-            color: #fff;
-            font-weight: bold;
-            font-size: 13px;
-            min-height: 42px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }}
-        .cell-sub {{
-            font-size: 9px;
-            opacity: 0.8;
-            font-weight: normal;
-        }}
-        .center-area {{
-            grid-column: 2 / 18;
-            grid-row: 2;
-            display: flex;
-            align-items: center;
-            justify-content: space-around;
-            background: rgba(25, 28, 36, 0.9);
-            border: 1px solid #444;
-            border-radius: 8px;
-            color: #aaa;
-            font-weight: bold;
-            font-size: 12px;
-            letter-spacing: 1px;
-            padding: 10px 0;
-            margin: 2px 0;
-        }}
-        .sector-title {{
-            flex: 1;
-            text-align: center;
-            border-right: 1px solid #333;
-        }}
-        .sector-title:last-child {{
-            border-right: none;
-        }}
-        .curva-col {{
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            gap: 2px;
-        }}
-    </style>
-
-    <div class="racetrack-container">
-        <div class="racetrack-grid">
-            <div class="curva-col" style="grid-column: 1; grid-row: 1 / span 3;">
-                <div class="cell" style="background:{curva_esq[0]['bg']}; border-top-left-radius: 20px;">
-                    {curva_esq[0]['n']}<span class="cell-sub">({curva_esq[0]['f']})</span>
+        <div class="racetrack-container">
+            <div class="racetrack-grid">
+                <div class="curva-col" style="grid-column: 1; grid-row: 1 / span 3;">
+                    <div class="cell" style="background:{get_cor_calor(c_esq_0)}; border-top-left-radius: 20px;">
+                        {c_esq_0}<span class="cell-sub">({int(cont.get(c_esq_0,0))})</span>
+                    </div>
+                    <div class="cell" style="background:{get_cor_calor(c_esq_1)};">
+                        {c_esq_1}<span class="cell-sub">({int(cont.get(c_esq_1,0))})</span>
+                    </div>
+                    <div class="cell" style="background:{get_cor_calor(c_esq_2)}; border-bottom-left-radius: 20px;">
+                        {c_esq_2}<span class="cell-sub">({int(cont.get(c_esq_2,0))})</span>
+                    </div>
                 </div>
-                <div class="cell" style="background:{curva_esq[1]['bg']};">
-                    {curva_esq[1]['n']}<span class="cell-sub">({curva_esq[1]['f']})</span>
-                </div>
-                <div class="cell" style="background:{curva_esq[2]['bg']}; border-bottom-left-radius: 20px;">
-                    {curva_esq[2]['n']}<span class="cell-sub">({curva_esq[2]['f']})</span>
-                </div>
-            </div>
 
-            {html_topo}
+                {html_topo}
 
-            <div class="center-area">
-                <div class="sector-title">TIER</div>
-                <div class="sector-title">ORPHELINS</div>
-                <div class="sector-title">VOISINS</div>
-                <div class="sector-title">ZERO</div>
-            </div>
-
-            {html_base}
-
-            <div class="curva-col" style="grid-column: 18; grid-row: 1 / span 3;">
-                <div class="cell" style="background:{curva_dir[0]['bg']}; border-top-right-radius: 20px;">
-                    {curva_dir[0]['n']}<span class="cell-sub">({curva_dir[0]['f']})</span>
+                <div class="center-area">
+                    <div class="sector-title">TIER</div>
+                    <div class="sector-title">ORPHELINS</div>
+                    <div class="sector-title">VOISINS</div>
+                    <div class="sector-title">ZERO</div>
                 </div>
-                <div class="cell" style="background:{curva_dir[1]['bg']};">
-                    {curva_dir[1]['n']}<span class="cell-sub">({curva_dir[1]['f']})</span>
-                </div>
-                <div class="cell" style="background:{curva_dir[2]['bg']}; border-bottom-right-radius: 20px;">
-                    {curva_dir[2]['n']}<span class="cell-sub">({curva_dir[2]['f']})</span>
+
+                {html_base}
+
+                <div class="curva-col" style="grid-column: 18; grid-row: 1 / span 3;">
+                    <div class="cell" style="background:{get_cor_calor(c_dir_0)}; border-top-right-radius: 20px;">
+                        {c_dir_0}<span class="cell-sub">({int(cont.get(c_dir_0,0))})</span>
+                    </div>
+                    <div class="cell" style="background:{get_cor_calor(c_dir_1)};">
+                        {c_dir_1}<span class="cell-sub">({int(cont.get(c_dir_1,0))})</span>
+                    </div>
+                    <div class="cell" style="background:{get_cor_calor(c_dir_2)}; border-bottom-right-radius: 20px;">
+                        {c_dir_2}<span class="cell-sub">({int(cont.get(c_dir_2,0))})</span>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-    """
+        """
 
-    st.markdown(html_racetrack, unsafe_html=True)
-    st.caption("🌡️ Distribuição Racetrack | As cores esquentam dinamicamente conforme a frequência das últimas 200 rodadas.")
+        st.markdown(html_racetrack, unsafe_html=True)
+        st.caption("🌡️ Distribuição Racetrack | As cores esquentam dinamicamente conforme a frequência das últimas 200 rodadas.")
+    except Exception as e:
+        st.error(f"Erro ao renderizar o Racetrack: {e}")
 else:
     st.info(f"Dados insuficientes para mapa de calor no Racetrack ({qtd}/20)")
 
