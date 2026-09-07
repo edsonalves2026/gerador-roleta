@@ -424,9 +424,12 @@ else:
 
 # STATUS DO MODO NO TOPO
 cor_modo = "#00E676" if modo_ativo == "DINAMICO" else "#29B6F6"
-st.markdown(f"<div style='background-color:#1E1E1E; padding:8px 15px; border-radius:5px; margin-bottom:15px; border-left: 5px solid {cor_modo}'>"
-            f"🔵 <b>MODO ATIVO:</b> <span style='color:{cor_modo}'>MODO OCULTOS {modo_ativo}</span> | "
-            f"<b>Status:</b> {status_motivo}</div>", unsafe_text_mode=True)
+html_banner = (
+    f"<div style='background-color:#1E1E1E; padding:8px 15px; border-radius:5px; margin-bottom:15px; border-left: 5px solid {cor_modo};'>"
+    f"🔵 <b>MODO ATIVO:</b> <span style='color:{cor_modo};'>MODO OCULTOS {modo_ativo}</span> | "
+    f"<b>Status:</b> {status_motivo}</div>"
+)
+st.markdown(html_banner, unsafe_allow_html=True)
 
 st.title("🎯 Radar de Roleta Pro - Painel de Testes & Sinais")
 
@@ -442,7 +445,7 @@ if hist:
             st.markdown(
                 f"<div style='background-color:{cor_fundo}; color:white; font-weight:bold; "
                 f"text-align:center; padding:10px; border-radius:5px; font-size:18px;'>{num}</div>",
-                unsafe_text_mode=True
+                unsafe_allow_html=True
             )
 else:
     st.info("Aguardando histórico para montagem da esteira...")
@@ -450,8 +453,11 @@ else:
 # BANNER DE RESULTADO E SINAL ATIVO
 if st.session_state.ultimo_resultado:
     bg_res = "#1B5E20" if "GREEN" in st.session_state.ultimo_resultado else "#B71C1C"
-    st.markdown(f"<div style='background-color:{bg_res}; padding:8px; border-radius:5px; color:white; font-weight:bold; text-align:center; margin-top:10px;'>"
-                f"Resultado do Último Sinal: {st.session_state.ultimo_resultado}</div>", unsafe_text_mode=True)
+    st.markdown(
+        f"<div style='background-color:{bg_res}; padding:8px; border-radius:5px; color:white; font-weight:bold; text-align:center; margin-top:10px;'>"
+        f"Resultado do Último Sinal: {st.session_state.ultimo_resultado}</div>",
+        unsafe_allow_html=True
+    )
 
 st.subheader("🚨 Sinal Ativo & Acompanhamento")
 if st.session_state.sinal_ativo:
@@ -523,7 +529,7 @@ with col_e3:
             cor = "#00E676" if num == 0 else ("#FF1744" if num in VERMELHOS else "#212121")
             html_mapa += f"<div style='background-color:{cor}; width:22px; height:22px; border-radius:50%; text-align:center; color:white; font-size:11px; font-weight:bold; line-height:22px;'>{num}</div>"
         html_mapa += "</div>"
-        st.markdown(html_mapa, unsafe_text_mode=True)
+        st.markdown(html_mapa, unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -537,7 +543,7 @@ if amostra_80:
         bg = f"rgba(255, 23, 68, {min(1.0, qtd/5 + 0.1)})" if n in VERMELHOS else (f"rgba(0, 230, 118, {min(1.0, qtd/5 + 0.2)})" if n == 0 else f"rgba(255, 255, 255, {min(1.0, qtd/5 + 0.05)})")
         html_race += f"<div style='background:{bg}; border:1px solid #333; min-width:32px; padding:5px 0; text-align:center; border-radius:4px; font-size:12px;'><b style='color:white;'>{n}</b><br><span style='font-size:10px; color:#aaa;'>{qtd}x</span></div>"
     html_race += "</div>"
-    st.markdown(html_race, unsafe_text_mode=True)
+    st.markdown(html_race, unsafe_allow_html=True)
 
 st.markdown("---")
 
