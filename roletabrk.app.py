@@ -1,4 +1,3 @@
-
 import time
 import requests
 import pandas as pd
@@ -6,6 +5,8 @@ import numpy as np
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+from streamlit_autorefresh import st_autorefresh
+import streamlit.components.v1 as components
 
 # A primeira instrução executável do Streamlit DEVE ser set_page_config
 st.set_page_config(page_title="Radar de Roleta Pro", layout="wide")
@@ -14,34 +15,64 @@ TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "")
 
 # ==========================================
-# 1. MATRIZ DE POSICIONAMENTO E CONSTANTES
+# ⬡ MATRIZ PRINCIPAL — MATRIZ ORIGINAL ⬡
 # ==========================================
-
-ROULETTE_CYLINDER = [
+CILINDRO_EUROPEU = [
     0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
     5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
 ]
+
+ROULETTE_CYLINDER = CILINDRO_EUROPEU  # Alias para compatibilidade
 
 NUMEROS_VERMELHOS = {
     1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36
 }
 
 SETORES_ROLETA = {
-    "Voisins du Zéro": [22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25],
-    "Tiers du Cylindre": [27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33],
-    "Orphelins": [1, 20, 14, 31, 9, 17, 34, 6]
+    "VOISINS_DU_ZERO": [22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25],
+    "TIERS_DU_CYLINDRE": [27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33],
+    "ORPHELINS": [1, 20, 14, 31, 9, 17, 34, 6],
+    "ZERO_SPIEL": [12, 35, 3, 26, 0, 32, 15]
 }
 
-TABELA_PUXADORES_FIXA = {
-    0: [26, 32], 1: [20, 14], 2: [21, 25], 3: [35, 26], 4: [19, 21],
-    5: [24, 10], 6: [27, 34], 7: [29, 28], 8: [30, 23], 9: [31, 22],
-    10: [5, 23], 11: [36, 30], 12: [28, 35], 13: [27, 36], 14: [20, 31],
-    15: [32, 19], 16: [24, 33], 17: [34, 6], 18: [22, 29], 19: [15, 4],
-    20: [1, 14], 21: [4, 2], 22: [9, 18], 23: [8, 10], 24: [5, 16],
-    25: [2, 17], 26: [0, 3], 27: [6, 13], 28: [7, 12], 29: [18, 7],
-    30: [11, 8], 31: [14, 9], 32: [0, 15], 33: [16, 1], 34: [17, 6],
-    35: [3, 12], 36: [13, 11]
+CAMUFLADOS_BASE = {
+    2: [11, 20, 29], 3: [12, 21, 30], 4: [13, 22, 31],
+    5: [14, 23, 32], 6: [15, 24, 33], 7: [16, 25, 34],
+    8: [17, 26, 35], 9: [18, 27, 36], 10: [1, 19, 28]
 }
+
+GRUPO_FANTASMA = {0, 2, 4, 6, 7, 11, 13, 14, 15, 17, 18, 19, 20, 21, 22, 25, 27, 28, 29, 31, 32, 34, 36}
+
+TABELA_OCULTOS_BRK = {
+    1: [1, 10, 19, 28, 34],
+    2: [2, 11, 20, 29, 24, 35],
+    3: [3, 12, 21, 30, 36, 14, 25],
+    4: [4, 13, 22, 31, 26, 15],
+    5: [5, 14, 23, 32, 16, 27],
+    6: [6, 15, 24, 33, 17],
+    7: [7, 16, 25, 34, 14, 29],
+    8: [8, 17, 26, 35, 19],
+    9: [9, 18, 27, 36],
+    10: [0, 5, 20, 30, 19, 28]
+}
+
+TABELA_PUXADORES_FIXA_BRK = {
+    0:  [33, 11, 21, 34], 1:  [20, 22, 32, 12], 2:  [36, 5, 7, 33],
+    3:  [0, 7, 20, 10],   4:  [5, 10, 7, 3],    5:  [3, 6, 9, 27],
+    6:  [7, 4, 17, 27],   7:  [8, 4, 18, 28],   8:  [3, 6, 19, 29],
+    9:  [4, 0, 10, 20],   10: [1, 2, 18, 28],   11: [3, 6, 24, 31],
+    12: [31, 4, 33, 35],  13: [5, 3, 7, 34],    14: [30, 6, 4, 0],
+    15: [21, 7, 8, 19],   16: [20, 8, 6, 7],    17: [11, 7, 9, 28],
+    18: [10, 8, 20, 29],  19: [4, 2, 17, 30],   20: [16, 3, 12, 27],
+    21: [24, 4, 26, 2],   22: [5, 26, 32, 21],  23: [6, 2, 22, 26],
+    24: [5, 7, 21, 29],   25: [8, 4, 13, 24],   26: [9, 5, 29, 17],
+    27: [10, 6, 14, 7],   28: [11, 7, 14, 30],  29: [0, 15, 3, 29],
+    30: [13, 33, 35, 0],  31: [34, 31, 3, 0],   32: [6, 30, 1, 0],
+    33: [7, 32, 1, 14],   34: [5, 2, 31, 33],   35: [6, 9, 3, 0],
+    36: [11, 13, 27, 30]
+}
+
+TABELA_PUXADORES_FIXA = TABELA_PUXADORES_FIXA_BRK  # Usando a matriz original de puxadores
 
 GRUPO_OCULTO_BRK = {
     "GRUPO_A": [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33],
@@ -338,7 +369,7 @@ def analisar_rodada_especifica(sub_historico, houve_troca=False):
     if fantasma["status"] == "ATIVADO":
         score += 1
         filtros_ativos.append("Fantasma")
-        alvos.update(fantasma["principais"]) # CORRIGIDO: Parêntese fechado aqui
+        alvos.update(fantasma["principais"])
     vizinhos_zero = [1, 5, 8, 11, 14, 23, 26, 32]
     if houve_troca and ultimo in vizinhos_zero:
         score += 1
