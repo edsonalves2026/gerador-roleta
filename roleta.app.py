@@ -343,13 +343,14 @@ def enviar_resultado_telegram(tipo, numero, etapa=""):
     enviar_mensagem_telegram(msg)
 
 # ==========================================
-# 4. INICIALIZAÇÃO DE ESTADOS
+# 4. INICIALIZAÇÃO DE ESTADOS & BARRA LATERAL
 # ==========================================
 if "historico" not in st.session_state: st.session_state.historico = []
 if "sinal_ativo" not in st.session_state:
     st.session_state.sinal_ativo = False
     st.session_state.alvos_sinal = []
     st.session_state.tentativa_atual = 0
+    st.session_state.max_tentativas = 3
     st.session_state.ultimo_resultado = None
 if "modo_operacional_atual" not in st.session_state: st.session_state.modo_operacional_atual = "DINAMICO"
 if "rodadas_no_modo_atual" not in st.session_state: st.session_state.rodadas_no_modo_atual = 15
@@ -361,9 +362,6 @@ modo_ativo, status_motivo = determinar_modo_operacional(
 )
 st.session_state.modo_operacional_atual = modo_ativo
 
-# ==========================================
-# 5. BARRA LATERAL (OPERAÇÃO)
-# ==========================================
 st.sidebar.header("🕹️ Painel de Operação")
 modo_operacao = st.sidebar.selectbox("🌐 Modo de Operação:", ["On-line (Captura Automática)", "Off-line (Digitação Manual)"])
 roleta_selecionada = st.sidebar.selectbox("🎰 Selecionar Roleta:", list(URLS_ROLETAS.keys()))
@@ -376,36 +374,100 @@ filtro_hibrido_opcao = st.sidebar.selectbox(
 )
 st.sidebar.radio("Estratégia no Gale ao detectar novo Sinal Elite:", ["Opção A: Mantém Sinal A (Aposta Fixa)", "Opção B: Fusão de Alvos Únicos (A + B)"], index=1)
 
+# ==========================================
+# 5. PROCESSAMENTO DE SINAIS (COM GALE DINÂMICO POR TIER)
+# ==========================================
 def processar_novo_numero(num_novo):
+    # --- 1. GESTÃO DE SINAIS EM ANDAMENTO (GREEN / RED) ---
     if st.session_state.sinal_ativo:
         st.session_state.tentativa_atual += 1
-        etapa_nome = {1: "Entrada Direta", 2: "Gale 1 (G1)", 3: "Gale 2 (G2)"}.get(st.session_state.tentativa_atual, f"Gale {st.session_state.tentativa_atual-1}")
-        if num_novo in set(st.session_state.alvos_sinal).union({0}):
+        etapas = {1: "Entrada Direta", 2: "Gale 1 (G1)", 3: "Gale 2 (G2)"}
+        etapa_nome = etapas.get(st.session_state.tentativa_atual, f"Gale {st.session_state.tentativa_atual - 1}")
+        
+        alvos_com_zero = set(st.session_state.alvos_sinal).union({0})
+        if num_novo in alvos_com_zero:
             st.session_state.ultimo_resultado = f"GREEN ✅ ({etapa_nome})"
             enviar_resultado_telegram("GREEN", num_novo, etapa_nome)
             st.session_state.sinal_ativo = False
+            st.session_state.tentativa_atual = 0
+            st.session_state.alvos_sinal = []
             return
-        elif st.session_state.tentativa_atual >= 3:
+        elif st.session_state.tentativa_atual >= st.session_state.get("max_tentativas", 3):
             st.session_state.ultimo_resultado = "LOSS / RED ❌"
             enviar_resultado_telegram("LOSS", num_novo)
             st.session_state.sinal_ativo = False
+            st.session_state.tentativa_atual = 0
+            st.session_state.alvos_sinal = []
             return
 
+    # --- 2. AVALIAÇÃO DE NOVOS GATILHOS POR SCORE ACUMULATIVO ---
     if len(st.session_state.historico) >= 20:
         res_ultimo = analisar_rodada_especifica(st.session_state.historico)
         score_obtido = res_ultimo.get("score_num", 0)
+        
         if score_obtido >= 4:
             tiers, df_rank = obter_tiers_cache()
             padrao = res_ultimo["padrao_nome"]
-            tier_do_padrao = "👑 Elite (Top 3)" if padrao in tiers.get("ELITE_TOP_3", []) else ("🥇 Seleção Ouro (Top 5)" if padrao in tiers.get("SELECAO_OURO_TOP_5", []) else ("🥈 Seleção (Top 10)" if padrao in tiers.get("SELECAO_TOP_10", []) else "Fora dos Tiers"))
             
-            tipo_operacao = "💥 HEAD-SHOT (MÁXIMA CONFLUÊNCIA)" if score_obtido == 5 and tier_do_padrao == "👑 Elite (Top 3)" else ("🎯 TIRO CERTO" if score_obtido >= 4 else None)
+            posicao_rank = None
+            taxa_acerto = None
+            if not df_rank.empty and padrao in df_rank["Padrão"].values:
+                idx = df_rank[df_rank["Padrão"] == padrao].index[0]
+                posicao_rank = idx + 1
+                taxa_acerto = df_rank.loc[idx, "Taxa de Acerto (%)"]
             
-            if tipo_operacao:
+            tier_do_padrao = "Fora dos Tiers"
+            if padrao in tiers.get("ELITE_TOP_3", []):
+                tier_do_padrao = "👑 Elite (Top 3)"
+            elif padrao in tiers.get("SELECAO_OURO_TOP_5", []):
+                tier_do_padrao = "🥇 Seleção Ouro (Top 5)"
+            elif padrao in tiers.get("SELECAO_TOP_10", []):
+                tier_do_padrao = "🥈 Seleção (Top 10)"
+            elif padrao in tiers.get("RADAR_TOP_30", []):
+                tier_do_padrao = "🥉 Radar (Top 30)"
+
+            # --- 3. DEFINIÇÃO DO TIPO DE FILTRO ---
+            tipo_operacao = None
+            if score_obtido == 5 and tier_do_padrao == "👑 Elite (Top 3)":
+                tipo_operacao = "💥 HEAD-SHOT (MÁXIMA CONFLUÊNCIA)"
+            elif score_obtido >= 4 and tier_do_padrao in ["👑 Elite (Top 3)", "🥇 Seleção Ouro (Top 5)", "🥈 Seleção (Top 10)"]:
+                tipo_operacao = "🎯 TIRO CERTO"
+                
+            # --- 4. VALIDAÇÃO DE ACORDO COM O PAINEL LATERAL ---
+            permitido = False
+            if filtro_hibrido_opcao == "Desativado (Usar apenas regras fixas)":
+                permitido = True
+            elif filtro_hibrido_opcao == "🥉 Radar (Top 30 - Permissivo)" and tier_do_padrao != "Fora dos Tiers":
+                permitido = True
+            elif filtro_hibrido_opcao == "🥈 Seleção (Top 10 - Equilibrado)" and tier_do_padrao in ["👑 Elite (Top 3)", "🥇 Seleção Ouro (Top 5)", "🥈 Seleção (Top 10)"]:
+                permitido = True
+            elif filtro_hibrido_opcao == "🥇 Seleção Ouro (Top 5 - Conservador)" and tier_do_padrao in ["👑 Elite (Top 3)", "🥇 Seleção Ouro (Top 5)"]:
+                permitido = True
+            elif filtro_hibrido_opcao == "👑 Elite (Top 3 - Máxima Precisão)" and tier_do_padrao == "👑 Elite (Top 3)":
+                permitido = True
+
+            # --- 5. DISPARO DO SINAL (GESTÃO DINÂMICA DE GALES) ---
+            if permitido and tipo_operacao is not None:
                 st.session_state.sinal_ativo = True
                 st.session_state.alvos_sinal = res_ultimo["alvos"]
                 st.session_state.tentativa_atual = 1
-                enviar_alerta_telegram(res_ultimo["ultimo"], score_obtido, res_ultimo["alvos"], res_ultimo["padrao_nome"].split(" + "), f"{tier_do_padrao} | {tipo_operacao}")
+                
+                # Regra: Tiro Único para Elite (Top 3); até Gale 2 para os demais
+                if tier_do_padrao == "👑 Elite (Top 3)":
+                    st.session_state.max_tentativas = 1
+                else:
+                    st.session_state.max_tentativas = 3
+                
+                enviar_alerta_telegram(
+                    ultimo_num=res_ultimo["ultimo"],
+                    score=score_obtido,
+                    alvos=res_ultimo["alvos"],
+                    detalhes=res_ultimo["padrao_nome"].split(" + "),
+                    tier_nome=f"{tier_do_padrao} | SELO: {tipo_operacao}",
+                    posicao_rank=posicao_rank,
+                    taxa_acerto=taxa_acerto,
+                    modo_estrategia=st.session_state.get("modo_operacional_atual", "DINAMICO")
+                )
 
 if modo_operacao == "On-line (Captura Automática)":
     novos_dados = buscar_dados_roleta_url(roleta_selecionada)
@@ -419,7 +481,7 @@ else:
         processar_novo_numero(num_manual)
 
 # ==========================================
-# 6. DASHBOARD VISUAL COMPLETO
+# 6. DASHBOARD VISUAL REFORMULADO
 # ==========================================
 
 # STATUS DO MODO NO TOPO
@@ -461,13 +523,14 @@ if st.session_state.ultimo_resultado:
 
 st.subheader("🚨 Sinal Ativo & Acompanhamento")
 if st.session_state.sinal_ativo:
-    st.warning(f"🎯 **SINAL IDENTIFICADO:** `{st.session_state.alvos_sinal}` | Tentativa ({st.session_state.tentativa_atual}/3)")
+    lim_gale = "Tiro Único (Sem Gale)" if st.session_state.get("max_tentativas", 3) == 1 else "Até Gale 2"
+    st.warning(f"🎯 **SINAL IDENTIFICADO:** `{st.session_state.alvos_sinal}` | Tentativa ({st.session_state.tentativa_atual}/{st.session_state.max_tentativas}) — *{lim_gale}*")
 else:
     st.success("✅ Nenhum sinal ativo no momento — Aguardando padrão convergente...")
 
 st.markdown("---")
 
-# --- B. MAPEAMENTO ANALÍTICO (TABELA DETALHADA) ---
+# --- B. MAPEAMENTO ANALÍTICO ---
 st.subheader(f"📊 Mapeamento Analítico — {roleta_selecionada}")
 if len(hist) >= 10:
     linhas_tabela = []
@@ -547,13 +610,39 @@ if amostra_80:
 
 st.markdown("---")
 
-# --- E. RANKING DE PADRÕES & PERFORMANCE DAS ESTRATÉGIAS ---
-st.subheader("🏆 Ranking de Padrões — Taxa de Acerto Histórica (200 Rodadas)")
+# --- E. DASHBOARD DE PERFORMANCE DOS TIERS & RANKING ---
+st.subheader("🏆 Desempenho Real Comparativo por Tier (200 Rodadas)")
+
 tiers_rank, df_rank = obter_tiers_cache()
+
 if not df_rank.empty:
-    fig_rank = px.bar(df_rank.head(10), x='Taxa de Acerto (%)', y='Padrão', orientation='h', text_auto=True, color='Taxa de Acerto (%)', color_continuous_scale='Reds')
-    fig_rank.update_layout(height=300, yaxis=dict(autorange="reversed"), margin=dict(l=10, r=10, t=10, b=10))
-    st.plotly_chart(fig_rank, use_container_width=True)
+    # Cálculo das médias por agrupamento de Tier
+    mean_top3 = round(df_rank.head(3)["Taxa de Acerto (%)"].mean(), 1) if len(df_rank) >= 3 else 0.0
+    mean_top5 = round(df_rank.head(5)["Taxa de Acerto (%)"].mean(), 1) if len(df_rank) >= 5 else 0.0
+    mean_top10 = round(df_rank.head(10)["Taxa de Acerto (%)"].mean(), 1) if len(df_rank) >= 10 else 0.0
+
+    df_tiers_perf = pd.DataFrame({
+        "Tier": ["👑 Elite (Top 3)", "🥇 Seleção Ouro (Top 5)", "🥈 Seleção (Top 10)"],
+        "Taxa de Acerto Média (%)": [mean_top3, mean_top5, mean_top10]
+    })
+
+    col_chart1, col_chart2 = st.columns([1, 1])
+
+    with col_chart1:
+        st.markdown("**📊 Assertividade Média por Categoria**")
+        fig_tiers = px.bar(
+            df_tiers_perf, x="Tier", y="Taxa de Acerto Média (%)",
+            color="Tier", text_auto=True,
+            color_discrete_map={"👑 Elite (Top 3)": "#FFD700", "🥇 Seleção Ouro (Top 5)": "#C0C0C0", "🥈 Seleção (Top 10)": "#CD7F32"}
+        )
+        fig_tiers.update_layout(height=280, showlegend=False, margin=dict(l=10, r=10, t=10, b=10))
+        st.plotly_chart(fig_tiers, use_container_width=True)
+
+    with col_chart2:
+        st.markdown("**🔥 Top Padrões Individuais**")
+        fig_rank = px.bar(df_rank.head(8), x='Taxa de Acerto (%)', y='Padrão', orientation='h', text_auto=True, color='Taxa de Acerto (%)', color_continuous_scale='Reds')
+        fig_rank.update_layout(height=280, yaxis=dict(autorange="reversed"), margin=dict(l=10, r=10, t=10, b=10))
+        st.plotly_chart(fig_rank, use_container_width=True)
 
     c_t1, c_t2, c_t3, c_t4 = st.columns(4)
     with c_t1: st.info(f"**👑 Elite Top 3:**\n" + "\n".join([f"• {p}" for p in tiers_rank.get("ELITE_TOP_3", [])]))
